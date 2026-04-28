@@ -1,0 +1,1677 @@
+local TARGET_SIZE = UDim2.fromOffset(450, 340)
+local targetFrame
+local isOpen = false
+local preloaded = false
+
+task.spawn(function()
+    while not targetFrame do
+        local screenGui = CoreGui:FindFirstChild("ScreenGui")
+        if screenGui then
+            for _, v in ipairs(screenGui:GetChildren()) do
+                if v:IsA("Frame") and v.Size == TARGET_SIZE then
+                    targetFrame = v
+                    targetFrame.Visible = true
+                    task.wait()
+                    targetFrame.Visible = false
+                    preloaded = true
+                    break
+                end
+            end
+        end
+        task.wait(0.25)
+    end
+end)
+
+
+local LIB_URL = "https://pastebin.com/raw/9S5d3dxy"
+local ok, Library = pcall(function()
+    local source = game:HttpGet(LIB_URL)
+    return loadstring(source)()
+end)
+
+if not ok then
+    error("Failed to load UI library: " .. tostring(Library))
+end
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local userId = player.UserId
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+
+game:GetService("StarterGui"):SetCore("SendNotification",{  
+    Title = "KYYY MSCLMSTRS",     
+    Text = "Welcome!",
+    Icon = "",
+    Duration = 5,
+})
+
+wait(4)
+
+game:GetService("StarterGui"):SetCore("SendNotification",{  
+    Title = "Hello 🖕",     
+    Text = player.Name,
+    Icon = content,
+    Duration = 4,
+})
+
+wait(3)
+
+
+local Window = Library:CreateWindow({
+    Title = "KYY - Muscle Masters",
+    SubTitle = "FREE",
+    Size = UDim2.fromOffset(450, 340),
+    TabWidth = 110,
+    Theme = "Combat",
+    Acrylic = false,
+})
+
+
+local Home        = Window:AddTab({ Title = "Main",          Icon = "home" })
+local farmingTab  = Window:AddTab({ Title = "Farming",       Icon = "leaf" })
+local Killer      = Window:AddTab({ Title = "Killer",        Icon = "flag" })
+local StatsTab    = Window:AddTab({ Title = "Stats",         Icon = "bar-chart" })
+local Shop        = Window:AddTab({ Title = "Egg Shop",      Icon = "gem" })
+local Misc        = Window:AddTab({ Title = "Miscellaneous", Icon = "menu" })
+local Settings    = Window:AddTab({ Title = "Credits",       Icon = "info" })
+
+local Options = Library.Options
+
+
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local NetworkClient = game:GetService("NetworkClient")
+local HttpService = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+
+
+local FpsBoostEnabled = false
+local OriginalSettings = {}
+local OptimizationConnection = nil
+
+
+local ConnectionEnhancerEnabled = false
+local PingOptimizerThread = nil
+
+
+local AntiLagEnabled = false
+local LagPreventionConnection = nil
+
+
+local function SaveOriginalSettings()
+    OriginalSettings = {
+        ShadowSoftness = Lighting.ShadowSoftness,
+        Brightness = Lighting.Brightness,
+        GlobalShadows = Lighting.GlobalShadows,
+        Technology = Lighting.Technology,
+        FogStart = Lighting.FogStart,
+        FogEnd = Lighting.FogEnd,
+    }
+end
+
+SaveOriginalSettings()
+
+
+local function EnableFpsBoost()
+    Lighting.GlobalShadows = false
+    Lighting.ShadowSoftness = 0
+    Lighting.Brightness = 1
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 999999
+    
+    pcall(function()
+        Lighting.Technology = Enum.Technology.Compatibility
+    end)
+    
+    Workspace.StreamingEnabled = true
+    
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") then
+            v.Enabled = false
+        end
+    end
+    
+    local function OptimizePart(part)
+        if part:IsA("BasePart") then
+            part.CastShadow = false
+            if part:IsA("MeshPart") then
+                part.RenderFidelity = Enum.RenderFidelity.Performance
+                part.CollisionFidelity = Enum.CollisionFidelity.Box
+            end
+        end
+    end
+    
+    for _, part in pairs(Workspace:GetDescendants()) do
+        pcall(function()
+            OptimizePart(part)
+        end)
+    end
+    
+    OptimizationConnection = Workspace.DescendantAdded:Connect(function(descendant)
+        pcall(function()
+            OptimizePart(descendant)
+        end)
+    end)
+    
+    local function OptimizeCharacter(character)
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CastShadow = false
+                part.Material = Enum.Material.Plastic
+            end
+        end
+    end
+    
+    if player.Character then
+        OptimizeCharacter(player.Character)
+    end
+    
+    player.CharacterAdded:Connect(function(char)
+        if FpsBoostEnabled then
+            task.wait(1)
+            OptimizeCharacter(char)
+        end
+    end)
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            OptimizeCharacter(plr.Character)
+        end
+    end
+    
+    local success, UserGameSettings = pcall(function()
+        return UserSettings():GetService("UserGameSettings")
+    end)
+    
+    if success then
+        UserGameSettings.MasterVolume = math.min(UserGameSettings.MasterVolume, 0.5)
+        UserGameSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+    end
+    
+end
+
+local function DisableFpsBoost()
+    for setting, value in pairs(OriginalSettings) do
+        pcall(function()
+            Lighting[setting] = value
+        end)
+    end
+    
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") then
+            v.Enabled = true
+        end
+    end
+    
+    if OptimizationConnection then
+        OptimizationConnection:Disconnect()
+        OptimizationConnection = nil
+    end
+    
+end
+
+
+local function EnableConnectionEnhancer()
+    ConnectionEnhancerEnabled = true
+    
+    pcall(function()
+        settings().Network.IncomingReplicationLag = 0
+        settings().Network.PhysicsSendRate = 60
+        settings().Network.PhysicsReceiveRate = 60
+    end)
+    
+    pcall(function()
+        game:GetService("NetworkClient"):SetOutgoingKBPSLimit(0)
+    end)
+    
+    local function OptimizeNetwork()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
+                if obj:IsA("Part") and obj.Anchored then
+                    pcall(function()
+                        obj:SetNetworkOwner(nil)
+                    end)
+                end
+            end
+        end
+    end
+    
+    pcall(OptimizeNetwork)
+    
+    PingOptimizerThread = task.spawn(function()
+        while ConnectionEnhancerEnabled do
+            if math.random(1, 10) == 1 then
+                pcall(function()
+                    collectgarbage("collect")
+                end)
+            end
+            
+            pcall(OptimizeNetwork)
+            
+            task.wait(5)
+        end
+    end)
+end
+
+local function DisableConnectionEnhancer()
+    ConnectionEnhancerEnabled = false
+    
+    task.wait(0.1)
+    
+    PingOptimizerThread = nil
+    
+    pcall(function()
+        settings().Network.PhysicsSendRate = 30
+        settings().Network.PhysicsReceiveRate = 30
+    end)
+end
+
+
+local function EnableAntiLag()
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    end)
+    
+    local function ReduceEffects()
+        for _, v in pairs(Workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Enabled = false
+            elseif v:IsA("Sound") then
+                v.Volume = math.min(v.Volume, 0.3)
+            end
+        end
+    end
+    
+    ReduceEffects()
+    
+    LagPreventionConnection = Workspace.DescendantAdded:Connect(function(descendant)
+        if AntiLagEnabled then
+            task.wait()
+            pcall(function()
+                if descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") then
+                    descendant.Enabled = false
+                elseif descendant:IsA("Sound") then
+                    descendant.Volume = math.min(descendant.Volume, 0.3)
+                end
+            end)
+        end
+    end)
+    
+    local function OptimizeHumanoid(humanoid)
+        humanoid.AutoRotate = false
+        pcall(function()
+            humanoid.AutoJumpEnabled = false
+        end)
+    end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Character then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                OptimizeHumanoid(hum)
+            end
+        end
+    end
+    
+end
+
+local function DisableAntiLag()
+    AntiLagEnabled = false
+    
+    if LagPreventionConnection then
+        LagPreventionConnection:Disconnect()
+        LagPreventionConnection = nil
+    end
+    
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Enabled = true
+        end
+    end
+    
+end
+
+
+Home:AddSection("Performance Optimization")
+
+local FpsToggle = Home:AddToggle("FpsBoost", { Title = "FPS Boost", Default = false })
+FpsToggle:OnChanged(function()
+    FpsBoostEnabled = Options.FpsBoost.Value
+    if FpsBoostEnabled then
+        EnableFpsBoost()
+    else
+        DisableFpsBoost()
+    end
+end)
+
+local ConnectionToggle = Home:AddToggle("ConnectionEnhancer", { Title = "Connection Enhancer", Default = false })
+ConnectionToggle:OnChanged(function()
+    local value = Options.ConnectionEnhancer.Value
+    if value then
+        EnableConnectionEnhancer()
+    else
+        DisableConnectionEnhancer()
+    end
+end)
+
+local AntiLagToggle = Home:AddToggle("AntiLag", { Title = "Anti Lag", Default = false })
+AntiLagToggle:OnChanged(function()
+    AntiLagEnabled = Options.AntiLag.Value
+    if AntiLagEnabled then
+        EnableAntiLag()
+    else
+        DisableAntiLag()
+    end
+end)
+
+
+local PlayersService = game:GetService("Players")
+local localPlayer = PlayersService.LocalPlayer
+local leaderstats = localPlayer:WaitForChild("leaderstats")
+local rebirths = leaderstats:WaitForChild("Rebirths")
+
+local AutoFarmEnabled = false
+local runningThreads = {}
+local rng = Random.new()
+
+local function stopAll()
+    AutoFarmEnabled = false
+    for _, t in ipairs(runningThreads) do
+        if t then task.cancel(t) end
+    end
+    table.clear(runningThreads)
+end
+
+local function GetPrompts(MachinesFolder, positions)
+    local EPSILON = 2.0
+    local prompts = {}
+    
+    for _, obj in ipairs(MachinesFolder:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+            local pos = obj.Position
+            for _, target in ipairs(positions) do
+                if (pos - target).Magnitude < EPSILON then
+                    for _, child in ipairs(obj:GetChildren()) do
+                        if child:IsA("ProximityPrompt") then
+                            table.insert(prompts, child)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return prompts
+end
+
+local function RunScriptBelow10()
+    local TARGET_POSITIONS = {
+        Vector3.new(-120.774185, 5.02033472, -56.9413261),
+        Vector3.new(-94.2546463, 5.02033472, -35.0815392)
+    }
+    
+    local MachinesFolder = workspace:WaitForChild("MachinesFolder")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local MachineRemote = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("MachineActiveEvent")
+    
+    local prompts = GetPrompts(MachinesFolder, TARGET_POSITIONS)
+    if #prompts == 0 then 
+        return 
+    end
+
+    table.insert(runningThreads, task.spawn(function()
+        while AutoFarmEnabled do
+            if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local prompt = prompts[rng:NextInteger(1, #prompts)]
+                if prompt and prompt.Enabled and prompt.Parent then
+                    local machinePart = prompt.Parent
+                    localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(machinePart.Position + Vector3.new(0, 3, 0))
+                    task.wait(0.1)
+                    fireproximityprompt(prompt)
+                end
+            end
+            task.wait(0.3)
+        end
+    end))
+    
+    table.insert(runningThreads, task.spawn(function()
+        while AutoFarmEnabled do
+            if localPlayer.Character then
+                pcall(function()
+                    MachineRemote:FireServer()
+                end)
+            end
+            task.wait(0.1)
+        end
+    end))
+end
+
+local function RunScriptAboveOrEqual10()
+    local TARGET_POSITIONS = {
+        Vector3.new(2747.89795, 7.65916204, 105.534966),
+        Vector3.new(2747.89795, 7.65916204, 126.657951),
+        Vector3.new(2743.69092, 11.6664858, 233.435394),
+        Vector3.new(2743.69092, 11.6664858, 258.496918),
+    }
+    
+    local MachinesFolder = workspace:WaitForChild("MachinesFolder")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local MachineRemote = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("MachineActiveEvent")
+    
+    local prompts = GetPrompts(MachinesFolder, TARGET_POSITIONS)
+    if #prompts == 0 then 
+        return 
+    end
+
+    table.insert(runningThreads, task.spawn(function()
+        while AutoFarmEnabled do
+            if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local prompt = prompts[rng:NextInteger(1, #prompts)]
+                if prompt and prompt.Enabled and prompt.Parent then
+                    local machinePart = prompt.Parent
+                    localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(machinePart.Position + Vector3.new(0, 3, 0))
+                    task.wait(0.1)
+                    fireproximityprompt(prompt)
+                end
+            end
+            task.wait(0.3)
+        end
+    end))
+    
+    table.insert(runningThreads, task.spawn(function()
+        while AutoFarmEnabled do
+            if localPlayer.Character then
+                pcall(function()
+                    MachineRemote:FireServer()
+                end)
+            end
+            task.wait(0.05)
+        end
+    end))
+end
+
+local AutoFarmToggle = farmingTab:AddToggle("AutoFarm", { Title = "Auto Farm", Default = false })
+AutoFarmToggle:OnChanged(function()
+    local Value = Options.AutoFarm.Value
+    if Value then
+        stopAll()
+        AutoFarmEnabled = true
+        if rebirths.Value < 10 then
+            RunScriptBelow10()
+        else
+            RunScriptAboveOrEqual10()
+        end
+    else
+        stopAll()
+    end
+end)
+
+farmingTab:AddSection("GLITCHING")
+
+local AutoGlitchEnabled = false
+local glitchThreads = {}
+local rng2 = Random.new()
+
+local function stopAllGlitch()
+    AutoGlitchEnabled = false
+    for _, t in ipairs(glitchThreads) do
+        if t then task.cancel(t) end
+    end
+    table.clear(glitchThreads)
+end
+
+local function CollectPrompts(folder, positions)
+    local EPSILON = 2.0
+    local prompts = {}
+    
+    for _, obj in ipairs(folder:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+            local pos = obj.Position
+            for _, targetPos in ipairs(positions) do
+                if (pos - targetPos).Magnitude < EPSILON then
+                    for _, child in ipairs(obj:GetChildren()) do
+                        if child:IsA("ProximityPrompt") then
+                            table.insert(prompts, child)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return prompts
+end
+
+local function RunGlitchBelow10()
+    local TARGET_POSITIONS = {
+        Vector3.new(-41.5637741, 3.47935009, 44.4185333),
+        Vector3.new(-24.1162872, 3.47935009, 44.4185333),
+    }
+    
+    local MachinesFolder = workspace:WaitForChild("MachinesFolder")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local MachineRemote = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("MachineActiveEvent")
+    
+    local prompts = CollectPrompts(MachinesFolder, TARGET_POSITIONS)
+    if #prompts == 0 then 
+        return 
+    end
+
+    table.insert(glitchThreads, task.spawn(function()
+        while AutoGlitchEnabled do
+            if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local prompt = prompts[rng2:NextInteger(1, #prompts)]
+                if prompt and prompt.Enabled and prompt.Parent then
+                    local machinePart = prompt.Parent
+                    localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(machinePart.Position + Vector3.new(0, 3, 0))
+                    task.wait(0.1)
+                    fireproximityprompt(prompt)
+                end
+            end
+            task.wait(0.3)
+        end
+    end))
+    
+    table.insert(glitchThreads, task.spawn(function()
+        while AutoGlitchEnabled do
+            if localPlayer.Character then
+                pcall(function()
+                    MachineRemote:FireServer()
+                end)
+            end
+            task.wait(0.1)
+        end
+    end))
+end
+
+local function RunGlitchAbove10()
+    local TARGET_POSITIONS = {
+        Vector3.new(2712.48022, 3.71804452, 299.783295),
+        Vector3.new(2691.11182, 3.71804452, 299.783295),
+        Vector3.new(2613.02808, 4.78257084, 289.732025),
+        Vector3.new(2584.5542, 4.78257084, 289.732025),
+    }
+    
+    local MachinesFolder = workspace:WaitForChild("MachinesFolder")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local MachineRemote = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("MachineActiveEvent")
+    
+    local prompts = CollectPrompts(MachinesFolder, TARGET_POSITIONS)
+    if #prompts == 0 then 
+        return 
+    end
+
+    table.insert(glitchThreads, task.spawn(function()
+        while AutoGlitchEnabled do
+            if localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local prompt = prompts[rng2:NextInteger(1, #prompts)]
+                if prompt and prompt.Enabled and prompt.Parent then
+                    local machinePart = prompt.Parent
+                    localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(machinePart.Position + Vector3.new(0, 3, 0))
+                    task.wait(0.1)
+                    fireproximityprompt(prompt)
+                end
+            end
+            task.wait(0.3)
+        end
+    end))
+    
+    table.insert(glitchThreads, task.spawn(function()
+        while AutoGlitchEnabled do
+            if localPlayer.Character then
+                pcall(function()
+                    MachineRemote:FireServer()
+                end)
+            end
+            task.wait(0.05)
+        end
+    end))
+end
+
+local AutoGlitchToggle = farmingTab:AddToggle("AutoGlitch", { Title = "Auto Glitch", Default = false })
+AutoGlitchToggle:OnChanged(function()
+    local Value = Options.AutoGlitch.Value
+    if Value then
+        stopAllGlitch()
+        AutoGlitchEnabled = true
+        if rebirths.Value <= 10 then
+            RunGlitchBelow10()
+        else
+            RunGlitchAbove10()
+        end
+    else
+        stopAllGlitch()
+    end
+end)
+
+-- REBIRTH SECTION
+farmingTab:AddSection("REBIRTH / LOCK POS")
+
+local AutoRebirth = false
+
+local AutoRebirthToggle = farmingTab:AddToggle("AutoRebirth", { Title = "Auto Rebirth", Default = false })
+AutoRebirthToggle:OnChanged(function()
+    AutoRebirth = Options.AutoRebirth.Value
+end)
+
+task.spawn(function()
+    while true do
+        if AutoRebirth then
+            pcall(function()
+                ReplicatedStorage
+                    :WaitForChild("RemotesEvent")
+                    :WaitForChild("RebirthEvent")
+                    :FireServer()
+            end)
+        end
+        task.wait(0.5)
+    end
+end)
+
+local LockPositionEnabled = false
+local LockPositionConnection = nil
+local LockedCFrame = nil
+
+local function EnableLockPosition()
+    if not localPlayer.Character then return end
+    local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    LockedCFrame = hrp.CFrame
+    
+    LockPositionConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if LockPositionEnabled and localPlayer.Character and LockedCFrame then
+            local hrp = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = LockedCFrame
+                hrp.Velocity = Vector3.new(0, 0, 0)
+                hrp.RotVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+end
+
+local function DisableLockPosition()
+    if LockPositionConnection then
+        LockPositionConnection:Disconnect()
+        LockPositionConnection = nil
+    end
+    LockedCFrame = nil
+end
+
+local LockPositionToggle = farmingTab:AddToggle("LockPosition", { Title = "Lock Position", Default = false })
+LockPositionToggle:OnChanged(function()
+    LockPositionEnabled = Options.LockPosition.Value
+    if LockPositionEnabled then
+        EnableLockPosition()
+    else
+        DisableLockPosition()
+    end
+end)
+
+localPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if LockPositionEnabled then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            LockedCFrame = hrp.CFrame
+        end
+    end
+end)
+
+
+local playerService = game:GetService("Players")
+local localPly = playerService.LocalPlayer
+local PunchEvent = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("PunchEvent")
+local BodyMovement = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("BodyMovement")
+local SizeChanged = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("SizeChanged")
+
+local runningKill = false
+local whitelist = {}
+local selectedPlayerName = nil
+local isSticking = false
+local isAutoPunch = false
+local isAutoKillAll = false
+local isTinyCombo = false
+local hands = {"RightHand", "LeftHand"}
+local handIndex = 1
+
+
+local spectating = false
+local currentTargetConnection = nil
+local camera = workspace.CurrentCamera
+
+
+local function EquipTool(toolName)
+    local backpack = localPly:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChild(toolName)
+        if tool and localPly.Character and not localPly.Character:FindFirstChild(toolName) then
+            local humanoid = localPly.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then humanoid:EquipTool(tool) end
+        end
+    end
+end
+
+local function AutoEquipPunch()
+    local char = localPly.Character
+    if not char then return end
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum then return end
+    for _, obj in pairs(char:GetChildren()) do
+        if obj:IsA("Tool") then
+            local n = obj.Name:lower()
+            if n:find("punch") or n:find("glove") or n:find("fist") or n:find("hand") or n:find("gauntlet") then return end
+        end
+    end
+    local bp = localPly:FindFirstChild("Backpack")
+    if bp then
+        for _, tool in pairs(bp:GetChildren()) do
+            if tool:IsA("Tool") then
+                local n = tool.Name:lower()
+                if n:find("punch") or n:find("glove") or n:find("fist") or n:find("hand") or n:find("gauntlet") then
+                    pcall(function() hum:EquipTool(tool) end) return
+                end
+            end
+        end
+        local ft = bp:FindFirstChildOfClass("Tool")
+        if ft then pcall(function() hum:EquipTool(ft) end) end
+    end
+end
+
+local function getPunchCFrame(targetPlayer)
+    local result = nil
+    pcall(function()
+        local tc = targetPlayer.Character
+        if not tc then return end
+        local tRoot = tc:FindFirstChild("HumanoidRootPart")
+        if not tRoot then return end
+        local hrpSize = tRoot.Size
+        local offsetZ = hrpSize.X <= 0.5 and 0.2 or hrpSize.X >= 5 and 1.5 or 1.0
+        local minY, maxY = math.huge, -math.huge
+        for _, part in pairs(tc:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency < 1 and part.Name ~= "lookTO" then
+                pcall(function()
+                    minY = math.min(minY, part.Position.Y - part.Size.Y/2)
+                    maxY = math.max(maxY, part.Position.Y + part.Size.Y/2)
+                end)
+            end
+        end
+        local centerY = (minY == math.huge) and tRoot.Position.Y or (maxY+minY)/2
+        local vel = tRoot.AssemblyLinearVelocity
+        local pp = tRoot.Position + Vector3.new(vel.X*0.083, 0, vel.Z*0.083)
+        local lookTO = tc:FindFirstChild("lookTO")
+        if lookTO then
+            local dir = Vector3.new(lookTO.Position.X-tRoot.Position.X, 0, lookTO.Position.Z-tRoot.Position.Z)
+            if dir.Magnitude > 0.01 then
+                dir = dir.Unit
+                result = CFrame.new(pp.X+dir.X*offsetZ, centerY, pp.Z+dir.Z*offsetZ) * CFrame.Angles(0, math.atan2(-dir.X,-dir.Z), 0)
+                return
+            end
+        end
+        result = CFrame.new(pp.X+tRoot.CFrame.LookVector.X*-offsetZ, centerY, pp.Z+tRoot.CFrame.LookVector.Z*-offsetZ) * CFrame.Angles(0, math.atan2(-tRoot.CFrame.LookVector.X, tRoot.CFrame.LookVector.Z), 0)
+    end)
+    return result
+end
+
+local function setCharSize(size)
+    pcall(function() SizeChanged:FireServer(size) end)
+    pcall(function()
+        local char = localPly.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.BodyDepthScale.Value  = size
+            hum.BodyHeightScale.Value = size
+            hum.BodyWidthScale.Value  = size
+            hum.HeadScale.Value       = size
+        end
+    end)
+end
+
+
+local function updateSpectateTarget(targetPlayer)
+    if currentTargetConnection then 
+        currentTargetConnection:Disconnect() 
+        currentTargetConnection = nil
+    end
+    
+    if targetPlayer and targetPlayer.Character then
+        local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            camera.CameraSubject = humanoid
+            
+            currentTargetConnection = targetPlayer.CharacterAdded:Connect(function(newChar)
+                task.wait(0.2)
+                local newHumanoid = newChar:FindFirstChildOfClass("Humanoid")
+                if newHumanoid then 
+                    camera.CameraSubject = newHumanoid 
+                end
+            end)
+        end
+    end
+end
+
+local function stopSpectating()
+    spectating = false
+    if currentTargetConnection then
+        currentTargetConnection:Disconnect()
+        currentTargetConnection = nil
+    end
+    
+    if localPly.Character then
+        local hum = localPly.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            camera.CameraSubject = hum
+        end
+    end
+end
+
+local function TeleportToTarget()
+    if not selectedPlayerName then return end
+    local target = playerService:FindFirstChild(selectedPlayerName)
+    if not target or whitelist[target.Name] then return end
+    if not target.Character or not localPly.Character then return end
+    local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+    local myHRP = localPly.Character:FindFirstChild("HumanoidRootPart")
+    if not targetHRP or not myHRP then return end
+    myHRP.CFrame = targetHRP.CFrame
+end
+
+local function AutoKillOne()
+    while runningKill do
+        if selectedPlayerName and not isAutoKillAll then
+            local target = playerService:FindFirstChild(selectedPlayerName)
+            if target and target.Character and localPly.Character then
+                local myRoot = localPly.Character:FindFirstChild("HumanoidRootPart")
+                local tc = target.Character
+                local tRoot = tc:FindFirstChild("HumanoidRootPart")
+                if myRoot and tRoot then
+                    if isSticking then
+                        local cf = getPunchCFrame(target)
+                        if cf then myRoot.CFrame = cf end
+                    end
+                    if isAutoPunch then
+                        AutoEquipPunch()
+                        pcall(function() BodyMovement:FireServer(-0.9848077297210693) end)
+                        handIndex = (handIndex % #hands) + 1
+                        pcall(function() PunchEvent:FireServer(tc, hands[handIndex]) end)
+                    end
+                end
+            end
+        end
+        task.wait(0.01)
+    end
+end
+
+local function GetPlayerList()
+    local list = {}
+    for _, plr in ipairs(playerService:GetPlayers()) do
+        if plr ~= localPly then
+            table.insert(list, plr.Name)
+        end
+    end
+    return list
+end
+
+
+Killer:AddSection("Player Selection")
+
+local PlayerDropdown = Killer:AddDropdown("SelectPlayer", {
+    Title = "Select Player",
+    Values = GetPlayerList(),
+    Multi = false,
+    Default = 1,
+})
+
+PlayerDropdown:OnChanged(function(Value)
+    selectedPlayerName = Value
+    
+    if spectating and selectedPlayerName then
+        local target = playerService:FindFirstChild(selectedPlayerName)
+        if target then
+            updateSpectateTarget(target)
+        end
+    end
+end)
+
+local function RefreshPlayerDropdown()
+    PlayerDropdown:SetValues(GetPlayerList())
+end
+
+task.wait()
+RefreshPlayerDropdown()
+
+playerService.PlayerAdded:Connect(function()
+    task.wait(0.1)
+    RefreshPlayerDropdown()
+end)
+
+playerService.PlayerRemoving:Connect(function(plr)
+    task.wait()
+    RefreshPlayerDropdown()
+    if selectedPlayerName == plr.Name then
+        selectedPlayerName = nil
+        
+        if spectating then
+            stopSpectating()
+        end
+    end
+end)
+
+
+local ViewPlayerToggle = Killer:AddToggle("ViewPlayer", { Title = "View Player (Spectate)", Default = false })
+ViewPlayerToggle:OnChanged(function()
+    spectating = Options.ViewPlayer.Value
+    if spectating then
+        if selectedPlayerName then
+            local target = playerService:FindFirstChild(selectedPlayerName)
+            if target then
+                updateSpectateTarget(target)
+            else
+                -- If no valid target, turn off toggle
+                spectating = false
+                Options.ViewPlayer:SetValue(false)
+            end
+        else
+            -- No player selected, turn off toggle
+            spectating = false
+            Options.ViewPlayer:SetValue(false)
+        end
+    else
+        stopSpectating()
+    end
+end)
+
+Killer:AddSection("Kill Options")
+
+
+local KillPlayerToggle = Killer:AddToggle("KillPlayer", { Title = "Kill Player (Teleport + Punch)", Default = false })
+KillPlayerToggle:OnChanged(function()
+    runningKill = Options.KillPlayer.Value
+    if runningKill then
+        isSticking = true
+        isAutoPunch = true
+        task.spawn(AutoKillOne)
+    else
+        isSticking = false
+        isAutoPunch = false
+    end
+end)
+
+
+local TinyComboToggle = Killer:AddToggle("TinyCombo", { Title = "Tiny Size Combo", Default = false })
+TinyComboToggle:OnChanged(function()
+    isTinyCombo = Options.TinyCombo.Value
+    if isTinyCombo then
+        setCharSize(0.001)
+        isSticking = true
+        isAutoPunch = true
+        task.spawn(function()
+            while isTinyCombo and selectedPlayerName do
+                local target = playerService:FindFirstChild(selectedPlayerName)
+                if target and target.Character and localPly.Character then
+                    local myRoot = localPly.Character:FindFirstChild("HumanoidRootPart")
+                    local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+                    if myRoot and tRoot then
+                        myRoot.CFrame = CFrame.new(tRoot.Position)
+                        AutoEquipPunch()
+                        pcall(function() BodyMovement:FireServer(-0.9848077297210693) end)
+                        handIndex = (handIndex % #hands) + 1
+                        pcall(function() PunchEvent:FireServer(target.Character, hands[handIndex]) end)
+                    end
+                end
+                task.wait(0.01)
+            end
+        end)
+    else
+        setCharSize(1)
+        isSticking = false
+        isAutoPunch = false
+    end
+end)
+
+-- Auto Kill All
+local function AutoKillAll()
+    while isAutoKillAll do
+        local myRoot = localPly.Character and localPly.Character:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            local targets = {}
+            for _, plr in ipairs(playerService:GetPlayers()) do
+                if plr ~= localPly then
+                    local tc = plr.Character
+                    if tc then
+                        local hum = tc:FindFirstChild("Humanoid")
+                        local tRoot = tc:FindFirstChild("HumanoidRootPart")
+                        if hum and hum.Health > 0 and tRoot then table.insert(targets, plr) end
+                    end
+                end
+            end
+            if #targets == 0 then task.wait(0.5)
+            else
+                for _, plr in ipairs(targets) do
+                    if not isAutoKillAll then break end
+                    local tc = plr.Character
+                    if tc then
+                        local hum = tc:FindFirstChild("Humanoid")
+                        local tRoot = tc:FindFirstChild("HumanoidRootPart")
+                        if hum and tRoot then
+                            while isAutoKillAll and hum and hum.Health > 0 and tRoot and tRoot.Parent do
+                                task.wait(0.01)
+                                local myR = localPly.Character and localPly.Character:FindFirstChild("HumanoidRootPart")
+                                if not myR then break end
+                                local cf = getPunchCFrame(plr)
+                                if cf then myR.CFrame = cf end
+                                AutoEquipPunch()
+                                pcall(function() BodyMovement:FireServer(-0.9848077297210693) end)
+                                handIndex = (handIndex % #hands) + 1
+                                pcall(function() PunchEvent:FireServer(tc, hands[handIndex]) end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local AutoKillToggle = Killer:AddToggle("AutoKill", { Title = "Auto Kill All", Default = false })
+AutoKillToggle:OnChanged(function()
+    isAutoKillAll = Options.AutoKill.Value
+    if isAutoKillAll then
+        task.spawn(AutoKillAll)
+    end
+end)
+
+-- Stop Teleport Button
+Killer:AddButton({
+    Title = "Stop Teleport",
+    Description = "Stop sticking to target",
+    Callback = function()
+        isSticking = false
+    end
+})
+
+-- Auto-restart on respawn
+localPly.CharacterAdded:Connect(function()
+    task.wait(1)
+    if Options.KillPlayer.Value then
+        runningKill = true
+        isSticking = true
+        isAutoPunch = true
+        task.spawn(AutoKillOne)
+    end
+    if Options.AutoKill.Value then
+        isAutoKillAll = true
+        task.spawn(AutoKillAll)
+    end
+    if Options.TinyCombo.Value then
+        isTinyCombo = true
+        setCharSize(0.001)
+    end
+    
+    if Options.ViewPlayer.Value and selectedPlayerName then
+        local target = playerService:FindFirstChild(selectedPlayerName)
+        if target then
+            updateSpectateTarget(target)
+        end
+    end
+end)
+
+
+local strong = leaderstats:WaitForChild("Strong")
+local rebirthValObj = leaderstats:WaitForChild("Rebirths")
+local killsValObj = leaderstats:WaitForChild("Kills")
+
+-- Find Endurance value
+local endurValObj = nil
+for _, child in pairs(localPlayer:GetChildren()) do
+    if child.Name == "Endurance" then 
+        endurValObj = child 
+        break 
+    end
+    local e = child:FindFirstChild("Endurance")
+    if e then 
+        endurValObj = e 
+        break 
+    end
+end
+
+
+local statsStartTime = tick()
+local initialStrength = tonumber(strong.Value) or 0
+local initialRebirths = rebirthValObj and (tonumber(rebirthValObj.Value) or 0) or 0
+local initialKills = killsValObj and (tonumber(killsValObj.Value) or 0) or 0
+local initialEndur = endurValObj and (tonumber(endurValObj.Value) or 0) or 0
+local totalStrGained = 0
+local totalRebGained = 0
+local totalKillGained = 0
+local totalEndGained = 0
+local lastStr = initialStrength
+local lastReb = initialRebirths
+local lastKill = initialKills
+local lastEnd = initialEndur
+
+
+local function AbbrevNumber(num)
+    num = tonumber(num) or 0
+    if num <= 0 then return "0" end
+    local abbrev = {"", "K", "M", "B", "T", "Qa", "Qi"}
+    local i = 1
+    while num >= 1000 and i < #abbrev do
+        num = num / 1000
+        i = i + 1
+    end
+    return string.format("%.2f%s", num, abbrev[i])
+end
+
+StatsTab:AddSection("Session Statistics")
+
+local stopwatchLabel = StatsTab:AddParagraph({ Title = "Session Timer", Content = "0d  0h  0m  0s" })
+
+StatsTab:AddSection("Current Stats")
+
+local strengthLabel = StatsTab:AddParagraph({ Title = "Strength  💪 ", Content = "-" })
+local enduranceLabel = StatsTab:AddParagraph({ Title = "Endurance  🛡️ ", Content = "-" })
+local rebirthsLabel = StatsTab:AddParagraph({ Title = "Rebirths  🔄 ", Content = "-" })
+local killsLabel = StatsTab:AddParagraph({ Title = "Kills  💀 ", Content = "-" })
+
+StatsTab:AddSection("Gained Stats [Hours / Days]")
+
+local projStrLabel = StatsTab:AddParagraph({ Title = "Strength Status  💪 ", Content = "-" })
+local projEndLabel = StatsTab:AddParagraph({ Title = "Endurance Status 🛡️ ", Content = "-" })
+local projRebLabel = StatsTab:AddParagraph({ Title = "Rebirth Status  🔄 ", Content = "-" })
+local projKillLabel = StatsTab:AddParagraph({ Title = "Kill Status  💀 ", Content = "-" })
+
+
+StatsTab:AddButton({
+    Title = "Reset Session",
+    Description = "Reset Tracking",
+    Callback = function()
+        statsStartTime = tick()
+        initialStrength = tonumber(strong.Value) or 0
+        initialRebirths = rebirthValObj and (tonumber(rebirthValObj.Value) or 0) or 0
+        initialKills = killsValObj and (tonumber(killsValObj.Value) or 0) or 0
+        initialEndur = endurValObj and (tonumber(endurValObj.Value) or 0) or 0
+        totalStrGained = 0
+        totalRebGained = 0
+        totalKillGained = 0
+        totalEndGained = 0
+        lastStr = initialStrength
+        lastReb = initialRebirths
+        lastKill = initialKills
+        lastEnd = initialEndur
+        
+        stopwatchLabel:SetDesc("0d  0h  0m  0s")
+        strengthLabel:SetDesc("-")
+        rebirthsLabel:SetDesc("-")
+        killsLabel:SetDesc("-")
+        enduranceLabel:SetDesc("-")
+        projStrLabel:SetDesc("-")
+        projRebLabel:SetDesc("-")
+        projKillLabel:SetDesc("-")
+        projEndLabel:SetDesc("-")
+    end
+})
+
+
+task.spawn(function()
+    local lastProjected = 0
+    while task.wait(0.2) do
+        local elapsed = tick() - statsStartTime
+        if elapsed >= 1 then
+            local days = math.floor(elapsed/86400)
+            local hours = math.floor((elapsed%86400)/3600)
+            local mins = math.floor((elapsed%3600)/60)
+            local secs = math.floor(elapsed%60)
+            stopwatchLabel:SetDesc(string.format("%dd  %dh  %dm  %ds", days, hours, mins, secs))
+            
+            local cStr = tonumber(strong.Value) or 0
+            local cReb = rebirthValObj and (tonumber(rebirthValObj.Value) or 0) or 0
+            local cKill = killsValObj and (tonumber(killsValObj.Value) or 0) or 0
+            local cEnd = endurValObj and (tonumber(endurValObj.Value) or 0) or 0
+            
+            local dS = cStr - lastStr
+            local dR = cReb - lastReb
+            local dK = cKill - lastKill
+            local dE = cEnd - lastEnd
+            
+            if dS > 0 then totalStrGained = totalStrGained + dS end
+            if dR > 0 then totalRebGained = totalRebGained + dR end
+            if dK > 0 then totalKillGained = totalKillGained + dK end
+            if dE > 0 then totalEndGained = totalEndGained + dE end
+            
+            lastStr = cStr
+            lastReb = cReb
+            lastKill = cKill
+            lastEnd = cEnd
+            
+            strengthLabel:SetDesc(AbbrevNumber(cStr) .. "   |   +" .. AbbrevNumber(totalStrGained))
+            rebirthsLabel:SetDesc(AbbrevNumber(cReb) .. "   |   +" .. AbbrevNumber(totalRebGained))
+            killsLabel:SetDesc(AbbrevNumber(cKill) .. "   |   +" .. AbbrevNumber(totalKillGained))
+            enduranceLabel:SetDesc(AbbrevNumber(cEnd) .. "   |   +" .. AbbrevNumber(totalEndGained))
+            
+            if tick() - lastProjected >= 3 and elapsed >= 5 then
+                lastProjected = tick()
+                local sSec = totalStrGained / elapsed
+                local rSec = totalRebGained / elapsed
+                local kSec = totalKillGained / elapsed
+                local eSec = totalEndGained / elapsed
+                local h, d = 3600, 86400
+                
+                projStrLabel:SetDesc(AbbrevNumber(math.floor(sSec*h)) .. " /h   |   " .. AbbrevNumber(math.floor(sSec*d)) .. "  /d  ")
+                projRebLabel:SetDesc(AbbrevNumber(math.floor(rSec*h)) .. " /h   |   " .. AbbrevNumber(math.floor(rSec*d)) .. "  /d  ")
+                projKillLabel:SetDesc(AbbrevNumber(math.floor(kSec*h)) .. " /h   |   " .. AbbrevNumber(math.floor(kSec*d)) .. "  /d  ")
+                projEndLabel:SetDesc(AbbrevNumber(math.floor(eSec*h)) .. " /h   |   " .. AbbrevNumber(math.floor(eSec*d)) .. "  /d  ")
+            end
+        end
+    end
+end)
+
+
+
+local SelectedEggType = "legendary"
+local ToggleEggsEnabled = false
+local AutoEquipEnabled = false
+
+local OpenPetRemote = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("OpenPetEvent")
+
+-- Egg type mapping
+local EggTypes = {
+    Common    = "common",
+    Rare      = "rare",
+    Epic      = "epic",
+    Legendary = "legendary",
+    Mythic    = "mythic",
+    Master    = "master"
+}
+
+
+local EggsDropdown = Shop:AddDropdown("SelectEgg", {
+    Title = "Select Egg Type",
+    Values = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Master"},
+    Multi = false,
+    Default = 1, -- Default to Legendary
+})
+
+EggsDropdown:OnChanged(function(Value)
+    SelectedEggType = EggTypes[Value]
+end)
+
+
+local AutoEggsToggle = Shop:AddToggle("AutoEggs", { Title = "Auto Open Eggs", Default = false })
+AutoEggsToggle:OnChanged(function()
+    ToggleEggsEnabled = Options.AutoEggs.Value
+    
+    if ToggleEggsEnabled then
+        task.spawn(function()
+            while ToggleEggsEnabled do
+                local success, err = pcall(function()
+                    OpenPetRemote:FireServer(SelectedEggType)
+                end)
+                
+                if not success then
+                    warn("Auto Egg Error: " .. tostring(err))
+                end
+                
+                task.wait(0.3)
+            end
+        end)
+    end
+end)
+
+
+local RemotesEvent = game:GetService("ReplicatedStorage"):WaitForChild("RemotesEvent")
+local OpenPetEvent = RemotesEvent:WaitForChild("OpenPetEvent")
+
+local instantHatchEnabled = false
+local hatchLoop = nil
+local hatchConnection = nil
+
+local function disableConnections()
+    pcall(function()
+        for _, v in pairs(getconnections(OpenPetEvent.OnClientEvent)) do
+            v:Disable()
+        end
+    end)
+end
+
+local function enableConnections()
+    pcall(function()
+        for _, v in pairs(getconnections(OpenPetEvent.OnClientEvent)) do
+            v:Enable()
+        end
+    end)
+end
+
+local function enableInstantHatch()
+    disableConnections()
+
+    hatchLoop = task.spawn(function()
+        while instantHatchEnabled do
+            task.wait(1)
+            if instantHatchEnabled then
+                disableConnections()
+            end
+        end
+    end)
+
+    hatchConnection = OpenPetEvent.OnClientEvent:Connect(function(petName, eggModel)
+        if not instantHatchEnabled then return end
+        if not petName or not eggModel then return end
+        pcall(function()
+            if eggModel and eggModel:IsA("BasePart") then
+                eggModel.Transparency = 1
+            end
+        end)
+    end)
+
+    print("Instant Hatch: ENABLED")
+end
+
+local function disableInstantHatch()
+    instantHatchEnabled = false
+    
+    if hatchLoop then
+        task.cancel(hatchLoop)
+        hatchLoop = nil
+    end
+
+    if hatchConnection then
+        hatchConnection:Disconnect()
+        hatchConnection = nil
+    end
+
+    enableConnections()
+
+    print("Instant Hatch: DISABLED")
+end
+
+
+local InstantHatchToggle = Shop:AddToggle("InstantHatch", {
+    Title = "Instant Hatch",
+    Description = "Skip egg hatching animation",
+    Default = false
+})
+
+InstantHatchToggle:OnChanged(function(Value)
+    instantHatchEnabled = Value
+    if instantHatchEnabled then
+        enableInstantHatch()
+    else
+        disableInstantHatch()
+    end
+end)
+
+-- AUTO SELL PETS TOGGLE
+Shop:AddButton({
+    Title = "Auto Sell",
+    Description = "Open Sell Pets UI",
+    Callback = function()
+        print("open sell pets Ui")
+        loadstring(game:HttpGet(
+            "https://raw.githubusercontent.com/bbroblox03-ctrl/Sxript-Loader/refs/heads/main/asdasd"))()
+    end
+})
+
+
+
+
+local ChocolateEatEvent = ReplicatedStorage:WaitForChild("RemotesEvent"):WaitForChild("ChocolateEatEvent")
+local isAutoEat = false
+local isEating = false
+local totalChocoEaten = 0
+local chocoSessionStart = tick()
+local lastEatTime = 0
+local EAT_COOLDOWN = 2.5
+
+local chocoRateLabel = Misc:AddParagraph({ Title = "Session Rate ⚡", Content = "0 /min" })
+local chocoCountLabel = Misc:AddParagraph({ Title = "Chocolate Stocks  🍫", Content = "0" })
+local chocoEatenLabel = Misc:AddParagraph({ Title = "Total Eaten  ✅", Content = "0" })
+
+local AutoEatChocolateToggle = Misc:AddToggle("AutoEatChocolate", { Title = "Auto Eat Chocolate", Default = false })
+AutoEatChocolateToggle:OnChanged(function()
+    isAutoEat = Options.AutoEatChocolate.Value
+end)
+
+
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local count = 0
+            local chocoFolder = localPlayer:FindFirstChild("ChocolatesFolder")
+            if chocoFolder then
+                for _, v in pairs(chocoFolder:GetChildren()) do 
+                    if v:IsA("Tool") then 
+                        count = count + 1 
+                    end 
+                end
+            end
+            local bp = localPlayer:FindFirstChild("Backpack")
+            if bp then
+                for _, v in pairs(bp:GetChildren()) do
+                    if v:IsA("Tool") and string.lower(v.Name):find("chocolate") then 
+                        count = count + 1 
+                    end
+                end
+            end
+            chocoCountLabel:SetDesc(tostring(count))
+            
+            local elapsed = tick() - chocoSessionStart
+            if elapsed > 5 then
+                chocoRateLabel:SetDesc(string.format("%.1f", (totalChocoEaten/elapsed)*60) .. " /min")
+            end
+        end)
+    end
+end)
+
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if isAutoEat and not isEating then
+            local now = tick()
+            if now - lastEatTime >= EAT_COOLDOWN then
+                lastEatTime = now
+                task.spawn(function()
+                    isEating = true
+                    pcall(function()
+                        local char = localPlayer.Character
+                        if not char then 
+                            isEating = false 
+                            return 
+                        end
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        if not hum then 
+                            isEating = false 
+                            return 
+                        end
+                        local bp = localPlayer:FindFirstChild("Backpack")
+                        if not bp then 
+                            isEating = false 
+                            return 
+                        end
+                        
+                        local choco = nil
+                        for _, tool in pairs(bp:GetChildren()) do
+                            if string.lower(tool.Name):find("chocolate") then 
+                                choco = tool 
+                                break 
+                            end
+                        end
+                        
+                        if not choco then
+                            local chocoFolder = localPlayer:FindFirstChild("ChocolatesFolder")
+                            if not chocoFolder then 
+                                isEating = false 
+                                return 
+                            end
+                            local c = chocoFolder:FindFirstChildOfClass("Tool")
+                            if not c then 
+                                isEating = false 
+                                return 
+                            end
+                            c.Parent = bp
+                            task.wait(0.2)
+                            choco = bp:FindFirstChild(c.Name)
+                        end
+                        
+                        if not choco then 
+                            isEating = false 
+                            return 
+                        end
+                        
+                        hum:EquipTool(choco)
+                        task.wait(0.5)
+                        local equipped = char:FindFirstChild(choco.Name)
+                        if equipped then
+                            equipped:Activate()
+                            ChocolateEatEvent:FireServer(equipped)
+                            task.wait(2.5)
+                            totalChocoEaten = totalChocoEaten + 1
+                            chocoEatenLabel:SetDesc(tostring(totalChocoEaten))
+                        end
+                    end)
+                    isEating = false
+                end)
+            end
+        end
+    end
+end)
+
+
+local AutoSpin = false
+
+local AutoSpinToggle = Misc:AddToggle("AutoSpin", { Title = "Auto Spin", Default = false })
+AutoSpinToggle:OnChanged(function()
+    AutoSpin = Options.AutoSpin.Value
+    if AutoSpin then
+        task.spawn(function()
+            while AutoSpin do
+                pcall(function()
+                    game:GetService("ReplicatedStorage")
+                        :WaitForChild("RemotesEvent")
+                        :WaitForChild("SpinFunction")
+                        :InvokeServer()
+                end)
+                task.wait(0.5)
+            end
+        end)
+    end
+end)
+
+
+local AntiAFKConnection = nil
+
+local function EnableAntiAFK()
+    if AntiAFKConnection then return end
+    AntiAFKConnection = localPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+    end)
+end
+
+local function DisableAntiAFK()
+    if AntiAFKConnection then
+        AntiAFKConnection:Disconnect()
+        AntiAFKConnection = nil
+    end
+end
+
+local AntiAFKToggle = Misc:AddButton({
+    Title = "Anti AFK",
+    Description = "Prevents being kicked for AFK",
+    Callback = function()
+        local VirtualUser = game:GetService("VirtualUser")
+        
+        local gui = Instance.new("ScreenGui")
+        gui.Parent = player.PlayerGui
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(0, 200, 0, 50)
+        textLabel.Position = UDim2.new(0.5, -100, 0, -50)
+        textLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.TextSize = 20
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextTransparency = 1
+        textLabel.Text = "ANTI AFK"
+        textLabel.Parent = gui
+        
+        local timerLabel = Instance.new("TextLabel")
+        timerLabel.Size = UDim2.new(0, 200, 0, 30)
+        timerLabel.Position = UDim2.new(0.5, -100, 0, -20)
+        timerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        timerLabel.Font = Enum.Font.GothamBold
+        timerLabel.TextSize = 18
+        timerLabel.BackgroundTransparency = 1
+        timerLabel.TextTransparency = 1
+        timerLabel.Text = "00:00:00"
+        timerLabel.Parent = gui
+        
+        local startTime = tick()
+        
+        task.spawn(function()
+            while true do
+                local elapsed = tick() - startTime
+                local hours = math.floor(elapsed / 3600)
+                local minutes = math.floor((elapsed % 3600) / 60)
+                local seconds = math.floor(elapsed % 60)
+                timerLabel.Text = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+                task.wait(1)
+            end
+        end)
+        
+        task.spawn(function()
+            while true do
+                for i = 0, 1, 0.01 do
+                    textLabel.TextTransparency = 1 - i
+                    timerLabel.TextTransparency = 1 - i
+                    task.wait(0.015)
+                end
+                task.wait(1.5)
+                for i = 0, 1, 0.01 do
+                    textLabel.TextTransparency = i
+                    timerLabel.TextTransparency = i
+                    task.wait(0.015)
+                end
+                task.wait(0.8)
+            end
+        end)
+        
+        player.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+            print("AFK prevention completed!")
+        end)
+    end
+})
+
+
+
+local creditsSection = Settings:AddSection("Markyy   -    💪🤨👈")
+
+
+creditsSection:AddButton({
+    Title = "TikTok",
+    Description = "Follow Me!     👈",
+    Callback = function()
+        setclipboard('https://www.tiktok.com/@markyy_0311?is_from_webapp=1&sender_device=pc    ')
+    end
+})
+
+creditsSection:AddButton({
+    Title = "Roblox Profile",
+    Description = "Visit the creator's profile     👈",
+    Callback = function()
+        setclipboard("https://www.roblox.com/users/2815154822/profile    ")
+    end
+})
+
+Window:SelectTab(1)
+print("KYYYY HUB Loaded Successfully!")
