@@ -1,0 +1,42 @@
+-- Auto Re-Execute System for Rolance Script
+-- Automatically re-runs the script on error or game reset
+
+local ScriptURL = "https://raw.githubusercontent.com/bbroblox03-ctrl/RolanceWalangBitaw/refs/heads/main/RolanceSobrangHinaSaRNG "
+
+-- Function to execute the main script
+local function ExecuteScript()
+    local success, err = pcall(function()
+        loadstring(game:HttpGet(ScriptURL))()
+    end)
+    
+    if not success then
+        warn("[Auto Re-Exec] Script error: " .. tostring(err))
+        warn("[Auto Re-Exec] Retrying in 3 seconds...")
+        task.wait(3)
+        ExecuteScript()
+    end
+end
+
+-- Auto re-execute on character respawn
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+if LocalPlayer then
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(2)
+        warn("[Auto Re-Exec] Character respawned - Re-executing script...")
+        ExecuteScript()
+    end)
+end
+
+-- Auto re-execute on game teleport (server hop)
+local TeleportService = game:GetService("TeleportService")
+TeleportService.LocalPlayerArrivedFromTeleport:Connect(function()
+    task.wait(2)
+    warn("[Auto Re-Exec] Teleported to new server - Re-executing script...")
+    ExecuteScript()
+end)
+
+-- Initial execution
+warn("[Auto Re-Exec] Starting script with auto re-execute enabled...")
+ExecuteScript()
