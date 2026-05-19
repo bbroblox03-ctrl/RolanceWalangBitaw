@@ -1,18 +1,36 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
+ 
 local Window = Rayfield:CreateWindow({
-    Name = "Kyypie | Slime RNG",
-    Icon = 71198376225870,
-    LoadingTitle = "50kg x KYY Loading",
-    LoadingSubtitle = "Slime RNG",
-    ShowText = "Rolance Walang Bitaw",
-    Theme = "Brown",
-    ToggleUIKeybind = "K",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "Markyy",
-        FileName = "Markyy unit"
-    }
+   Name = "Kyypie Hub - Slime RNG",
+   Icon = 109469954305452,
+   LoadingTitle = "Kyype Hub",
+   LoadingSubtitle = "by Markyy",
+   ShowText = "Mahenang Rolance",
+   Theme = "AmberGlow",
+   ToggleUIKeybind = "K",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "KyypieHub",
+      FileName = "Markyy"
+   },
+   Discord = { Enabled = false },
+KeySystem = true, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Kyypie Hub",
+      Subtitle = "Key System",
+      Note = "Rolance Walang Bitaw", 
+      FileName = "Kyy-key", 
+      SaveKey = true,
+      GrabKeyFromSite = false, 
+Key = {
+    "RolanceMahena",
+    "key_01736",
+    "key_90544",
+    "key_66120",
+    "key_23877",
+    "key_69740"
+}
+   }
 })
 
 -- ==================== SERVICES ====================
@@ -26,108 +44,59 @@ local TweenService = game:GetService("TweenService")
 local plr = Players.LocalPlayer
 local cam = Workspace.CurrentCamera
 
--- ==================== REMOTE SCANNER ====================
--- Auto-discovers remotes by searching ReplicatedStorage
-local Remotes = {}
-
-local function findRemote(pathPattern, remoteName)
-    local function search(parent, depth)
-        if depth > 6 then return nil end
-        for _, child in ipairs(parent:GetChildren()) do
-            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or child:IsA("BindableEvent") then
-                if child.Name == remoteName or (pathPattern and child.Name:find(pathPattern)) then
-                    return child
-                end
-            end
-            if #child:GetChildren() > 0 then
-                local found = search(child, depth + 1)
-                if found then return found end
-            end
+-- ==================== REMOTES ====================
+local Remotes
+local function GetRemotes()
+    local success, result = pcall(function()
+        return ReplicatedStorage:WaitForChild("Packages", 10)
+            :WaitForChild("_Index", 10)
+            :WaitForChild("leifstout_networker@0.3.1", 10)
+            :WaitForChild("networker", 10)
+            :WaitForChild("_remotes", 10)
+    end)
+    if success then
+        return result
+    end
+    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+        if obj.Name == "_remotes" and obj:IsA("Folder") then
+            return obj
         end
-        return nil
     end
-    return search(ReplicatedStorage, 0)
+    return nil
 end
 
-local function findRemoteByService(serviceName)
-    local function search(parent, depth)
-        if depth > 6 then return nil end
-        for _, child in ipairs(parent:GetChildren()) do
-            if child.Name == serviceName then
-                local remoteFunc = child:FindFirstChild("RemoteFunction")
-                local remoteEvent = child:FindFirstChild("RemoteEvent")
-                return remoteFunc or remoteEvent
-            end
-            if #child:GetChildren() > 0 then
-                local found = search(child, depth + 1)
-                if found then return found end
-            end
-        end
-        return nil
+Remotes = GetRemotes()
+
+local SlimeGunRemote, ZonesRemote, RollRemote, LootRemote, PotionRemote
+if Remotes then
+    local slimeService = Remotes:FindFirstChild("SlimeGunService")
+    if slimeService then
+        SlimeGunRemote = slimeService:FindFirstChild("RemoteFunction")
     end
-    return search(ReplicatedStorage, 0)
-end
-
--- Try known paths first, then scan
-local function getRemote(serviceName, knownPath)
-    if knownPath then
-        local ok, remote = pcall(function()
-            local current = ReplicatedStorage
-            for _, part in ipairs(knownPath) do
-                current = current:WaitForChild(part, 2)
-            end
-            return current
-        end)
-        if ok and remote then return remote end
+    local zoneService = Remotes:FindFirstChild("ZonesService")
+    if zoneService then
+        ZonesRemote = zoneService:FindFirstChild("RemoteFunction")
     end
-    return findRemoteByService(serviceName)
-end
-
--- ==================== DISCOVERED REMOTES ====================
-local SlimeGunRemote = getRemote("SlimeGunService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "SlimeGunService", "RemoteFunction"})
-
-local ZonesRemote = getRemote("ZonesService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "ZonesService", "RemoteFunction"})
-
--- Roll Remote - try multiple known patterns
-local RollRemote = getRemote("RollService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "RollService", "RemoteFunction"})
-
--- Loot Remote
-local LootRemote = getRemote("LootService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "LootService", "RemoteFunction"})
-
--- Inventory/Potion Remote
-local InventoryRemote = getRemote("InventoryService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "InventoryService", "RemoteFunction"})
-
-local PotionRemote = getRemote("PotionService",
-    {"Packages", "_Index", "leifstout_networker@0.3.1", "networker", "_remotes", "PotionService", "RemoteFunction"})
-
--- Try alternative: direct Remotes folder
-if not RollRemote then
-    local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
-    if remotesFolder then
-        local rollService = remotesFolder:FindFirstChild("RollService")
-        if rollService then RollRemote = rollService:FindFirstChild("RemoteFunction") or rollService:FindFirstChild("RemoteEvent") end
-
-        local invService = remotesFolder:FindFirstChild("InventoryService")
-        if invService then InventoryRemote = invService:FindFirstChild("RemoteFunction") or invService:FindFirstChild("RemoteEvent") end
-
-        local potService = remotesFolder:FindFirstChild("PotionService")
-        if potService then PotionRemote = potService:FindFirstChild("RemoteFunction") or potService:FindFirstChild("RemoteEvent") end
+    local rollService = Remotes:FindFirstChild("RollService")
+    if rollService then
+        RollRemote = rollService:FindFirstChild("RemoteFunction")
+    end
+    local lootService = Remotes:FindFirstChild("LootService")
+    if lootService then
+        LootRemote = lootService:FindFirstChild("RemoteFunction")
+    end
+    local potionService = Remotes:FindFirstChild("PotionService")
+    if potionService then
+        PotionRemote = potionService:FindFirstChild("RemoteFunction")
     end
 end
 
--- Debug print discovered remotes
-print("[Kyypie] Discovered Remotes:")
-print("  SlimeGunRemote:", SlimeGunRemote and SlimeGunRemote:GetFullName() or "NOT FOUND")
-print("  ZonesRemote:", ZonesRemote and ZonesRemote:GetFullName() or "NOT FOUND")
-print("  RollRemote:", RollRemote and RollRemote:GetFullName() or "NOT FOUND")
-print("  LootRemote:", LootRemote and LootRemote:GetFullName() or "NOT FOUND")
-print("  InventoryRemote:", InventoryRemote and InventoryRemote:GetFullName() or "NOT FOUND")
-print("  PotionRemote:", PotionRemote and PotionRemote:GetFullName() or "NOT FOUND")
+print("[Kyypie] Remotes loaded:")
+print("  SlimeGunRemote:", SlimeGunRemote and "OK" or "NOT FOUND")
+print("  ZonesRemote:", ZonesRemote and "OK" or "NOT FOUND")
+print("  RollRemote:", RollRemote and "OK" or "NOT FOUND")
+print("  LootRemote:", LootRemote and "OK" or "NOT FOUND")
+print("  PotionRemote:", PotionRemote and "OK" or "NOT FOUND")
 
 -- ==================== SAFE FLAG ACCESS ====================
 local function getFlag(name)
@@ -165,8 +134,7 @@ local State = {
     lastFruitScan = 0,
     cachedFruits = {},
     fruitScanInterval = 0.5,
-    -- NEW: Roll & Potion states
-    rollCooldown = 0.5,
+    -- Roll & Potion states
     lastRollTime = 0,
     selectedPotion = "Luck Boost",
     potionAmount = 1,
@@ -204,40 +172,16 @@ local function purchaseNextZone()
     end)
 end
 
--- ==================== ROLL HELPERS ====================
+-- ==================== ROLL ====================
 local function doRoll()
-    if tick() - State.lastRollTime < State.rollCooldown then return end
-    State.lastRollTime = tick()
-
     pcall(function()
         if RollRemote then
-            if RollRemote:IsA("RemoteFunction") then
-                RollRemote:InvokeServer("roll")
-            elseif RollRemote:IsA("RemoteEvent") then
-                RollRemote:FireServer("roll")
-            end
-        else
-            -- Fallback: try to find and click the roll button
-            local playerGui = plr:FindFirstChild("PlayerGui")
-            if playerGui then
-                for _, gui in ipairs(playerGui:GetChildren()) do
-                    if gui:IsA("ScreenGui") then
-                        local rollButton = gui:FindFirstChild("RollButton", true) or gui:FindFirstChild("Roll", true)
-                        if rollButton and rollButton:IsA("TextButton") then
-                            -- Simulate click
-                            for _, conn in ipairs(getconnections(rollButton.MouseButton1Click)) do
-                                pcall(function() conn:Fire() end)
-                            end
-                            return
-                        end
-                    end
-                end
-            end
+            RollRemote:InvokeServer("requestRoll", true)
         end
     end)
 end
 
--- ==================== POTION HELPERS ====================
+-- ==================== POTION ====================
 local potionNameMap = {
     ["Luck Boost"] = "LuckBoost",
     ["Ultra Luck Boost"] = "UltraLuckBoost",
@@ -248,62 +192,11 @@ local potionNameMap = {
 local function usePotion(potionName, amount)
     amount = amount or 1
     local internalName = potionNameMap[potionName] or potionName
-
     pcall(function()
         if PotionRemote then
-            if PotionRemote:IsA("RemoteFunction") then
-                PotionRemote:InvokeServer("usePotion", internalName, amount)
-            elseif PotionRemote:IsA("RemoteEvent") then
-                PotionRemote:FireServer("usePotion", internalName, amount)
-            end
-        elseif InventoryRemote then
-            -- Try inventory remote as fallback
-            if InventoryRemote:IsA("RemoteFunction") then
-                InventoryRemote:InvokeServer("useItem", internalName, amount)
-            elseif InventoryRemote:IsA("RemoteEvent") then
-                InventoryRemote:FireServer("useItem", internalName, amount)
-            end
-        else
-            -- Ultimate fallback: scan for any remote with "potion" or "use" in name
-            local function scanForPotionRemote(parent)
-                for _, child in ipairs(parent:GetDescendants()) do
-                    if (child:IsA("RemoteFunction") or child:IsA("RemoteEvent")) then
-                        local name = child.Name:lower()
-                        if name:find("potion") or name:find("use") or name:find("item") or name:find("consume") then
-                            if child:IsA("RemoteFunction") then
-                                child:InvokeServer("usePotion", internalName, amount)
-                            else
-                                child:FireServer("usePotion", internalName, amount)
-                            end
-                            return true
-                        end
-                    end
-                end
-                return false
-            end
-            scanForPotionRemote(ReplicatedStorage)
+            PotionRemote:InvokeServer("usePotion", internalName, amount)
         end
     end)
-end
-
-local function getPotionCount(potionName)
-    local count = 0
-    pcall(function()
-        local backpack = plr:FindFirstChild("Backpack")
-        if backpack then
-            for _, item in ipairs(backpack:GetChildren()) do
-                if item.Name:lower():find(potionName:lower()) then
-                    count = count + 1
-                end
-            end
-        end
-        -- Also check leaderstats or data
-        local leaderstats = plr:FindFirstChild("leaderstats")
-        if leaderstats then
-            -- Potions might be stored in a folder
-        end
-    end)
-    return count
 end
 
 local function setM1(down)
@@ -1130,8 +1023,7 @@ task.spawn(function()
                 doRoll()
             end
         end)
-        -- Fast roll = 0.05s delay, Normal auto roll = 0.5s delay
-        local delayTime = State.toggles.fastRoll1 and 0.05 or 0.5
+        local delayTime = State.toggles.fastRoll1 and 0 or 0.5
         task.wait(delayTime)
     end
 end)
@@ -1326,7 +1218,6 @@ local AutoRollToggle = MainTab:CreateToggle({
     Callback = function(Value)
         State.toggles.autoRoll1 = Value
         if Value and State.toggles.fastRoll1 then
-            -- Disable fast roll if auto roll is on (mutually exclusive)
             State.toggles.fastRoll1 = false
             pcall(function()
                 if FastRollToggle and type(FastRollToggle.Set) == "function" then
@@ -1344,7 +1235,6 @@ local FastRollToggle = MainTab:CreateToggle({
     Callback = function(Value)
         State.toggles.fastRoll1 = Value
         if Value and State.toggles.autoRoll1 then
-            -- Disable auto roll if fast roll is on (mutually exclusive)
             State.toggles.autoRoll1 = false
             pcall(function()
                 if AutoRollToggle and type(AutoRollToggle.Set) == "function" then
@@ -1477,7 +1367,7 @@ local Themes = SettingsTab:CreateDropdown({
 
 local Paragraph = SettingsTab:CreateParagraph({
     Title = "How to use",
-    Content = "Auto Roll automatically rolls slimes. Fast Roll spams rolls at max speed. Auto Potion uses selected potion every cooldown. All remotes are auto-discovered at runtime."
+    Content = "Auto Roll uses requestRoll remote. Fast Roll spams with no delay. Auto Potion uses selected potion every 2 seconds."
 })
 
 -- ==================== BACKGROUND ====================
