@@ -14,7 +14,7 @@ local Window = Rayfield:CreateWindow({
       FileName = "Markyy"
    },
    Discord = { Enabled = false },
-KeySystem = true, -- Set this to true to use our key system
+KeySystem = true,
    KeySettings = {
       Title = "Kyypie Hub",
       Subtitle = "Key System",
@@ -67,7 +67,7 @@ end
 
 Remotes = GetRemotes()
 
-local SlimeGunRemote, ZonesRemote, RollRemote, LootRemote, PotionRemote
+local SlimeGunRemote, ZonesRemote, RollRemote, LootRemote, BoostRemote
 if Remotes then
     local slimeService = Remotes:FindFirstChild("SlimeGunService")
     if slimeService then
@@ -85,9 +85,9 @@ if Remotes then
     if lootService then
         LootRemote = lootService:FindFirstChild("RemoteFunction")
     end
-    local potionService = Remotes:FindFirstChild("PotionService")
-    if potionService then
-        PotionRemote = potionService:FindFirstChild("RemoteFunction")
+    local boostService = Remotes:FindFirstChild("BoostService")
+    if boostService then
+        BoostRemote = boostService:FindFirstChild("RemoteFunction")
     end
 end
 
@@ -96,7 +96,7 @@ print("  SlimeGunRemote:", SlimeGunRemote and "OK" or "NOT FOUND")
 print("  ZonesRemote:", ZonesRemote and "OK" or "NOT FOUND")
 print("  RollRemote:", RollRemote and "OK" or "NOT FOUND")
 print("  LootRemote:", LootRemote and "OK" or "NOT FOUND")
-print("  PotionRemote:", PotionRemote and "OK" or "NOT FOUND")
+print("  BoostRemote:", BoostRemote and "OK" or "NOT FOUND")
 
 -- ==================== SAFE FLAG ACCESS ====================
 local function getFlag(name)
@@ -134,10 +134,8 @@ local State = {
     lastFruitScan = 0,
     cachedFruits = {},
     fruitScanInterval = 0.5,
-    -- Roll & Potion states
     lastRollTime = 0,
     selectedPotion = "Luck Boost",
-    potionAmount = 1,
     lastPotionTime = 0,
     potionCooldown = 2,
     toggles = {
@@ -181,20 +179,19 @@ local function doRoll()
     end)
 end
 
--- ==================== POTION ====================
+-- ==================== BOOST / POTION ====================
 local potionNameMap = {
-    ["Luck Boost"] = "LuckBoost",
-    ["Ultra Luck Boost"] = "UltraLuckBoost",
-    ["Currency Boost"] = "CurrencyBoost",
-    ["Roll Speed Boost"] = "RollSpeedBoost",
+    ["Luck Boost"] = "luck",
+    ["Ultra Luck Boost"] = "ultraLuck",
+    ["Currency Boost"] = "currency",
+    ["Roll Speed Boost"] = "rollSpeed",
 }
 
-local function usePotion(potionName, amount)
-    amount = amount or 1
+local function usePotion(potionName)
     local internalName = potionNameMap[potionName] or potionName
     pcall(function()
-        if PotionRemote then
-            PotionRemote:InvokeServer("usePotion", internalName, amount)
+        if BoostRemote then
+            BoostRemote:InvokeServer("requestUseBoost", internalName)
         end
     end)
 end
@@ -1035,7 +1032,7 @@ task.spawn(function()
             if State.toggles.autoPotion1 then
                 if tick() - State.lastPotionTime >= State.potionCooldown then
                     State.lastPotionTime = tick()
-                    usePotion(State.selectedPotion, State.potionAmount)
+                    usePotion(State.selectedPotion)
                 end
             end
         end)
@@ -1259,6 +1256,7 @@ local PotionDropdown = MainTab:CreateDropdown({
     end,
 })
 
+-- Note: Amount input kept for UI consistency but BoostService does not use amounts
 local PotionAmountInput = MainTab:CreateInput({
     Name = "Amount to Use",
     PlaceholderText = "1",
@@ -1367,7 +1365,7 @@ local Themes = SettingsTab:CreateDropdown({
 
 local Paragraph = SettingsTab:CreateParagraph({
     Title = "How to use",
-    Content = "Auto Roll uses requestRoll remote. Fast Roll spams with no delay. Auto Potion uses selected potion every 2 seconds."
+    Content = "Auto Roll uses requestRoll remote. Fast Roll spams with no delay. Auto Potion uses requestUseBoost remote every 2 seconds."
 })
 
 -- ==================== BACKGROUND ====================
