@@ -88,136 +88,10 @@ local State = {
         noclip1 = false,
         infJump1 = false,
         antiStaffKick1 = true,
-        autoEnableAntiStaff = true,
     }
 }
-
--- ==================== STAFF DETECTION SYSTEM ====================
-local StaffDetector = {
-    detectedStaff = {},
-    scanInterval = 3,
-    lastScan = 0,
-    indicators = {
-        teams = {"Staff", "Admin", "Moderator", "Mod", "Owner", "Developer", "Dev", "Management", "Helper"},
-        tools = {"Ban", "Kick", "Admin", "Mod", "Hammer", "Sword", "Staff", "Punish", "Tool"},
-        namePatterns = {"admin", "mod", "staff", "owner", "dev", "developer", "manager", "helper"},
-        overheadTags = {"staff", "admin", "mod", "owner", "dev"}
-    }
-}
-
-local function checkIfStaff(player)
-    if player == plr then return false, nil end
-    if StaffDetector.detectedStaff[player.UserId] then return true, StaffDetector.detectedStaff[player.UserId].reason end
-    
-    -- Team check
-    if player.Team then
-        local teamName = player.Team.Name:lower()
-        for _, indicator in ipairs(StaffDetector.indicators.teams) do
-            if teamName:find(indicator:lower()) then
-                return true, "Team: " .. player.Team.Name
-            end
-        end
-    end
-    
-    -- Name/DisplayName check
-    local nameLower = player.Name:lower()
-    local displayLower = player.DisplayName:lower()
-    for _, pattern in ipairs(StaffDetector.indicators.namePatterns) do
-        if nameLower:find(pattern) or displayLower:find(pattern) then
-            return true, "Name pattern: " .. pattern
-        end
-    end
-    
-    -- Character tool check
-    local char = player.Character
-    if char then
-        for _, obj in ipairs(char:GetDescendants()) do
-            if obj:IsA("Tool") then
-                local toolName = obj.Name:lower()
-                for _, pattern in ipairs(StaffDetector.indicators.tools) do
-                    if toolName:find(pattern:lower()) then
-                        return true, "Admin Tool: " .. obj.Name
-                    end
-                end
-            end
-            -- Overhead tag / nametag check
-            if obj:IsA("BillboardGui") or obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                local text = (obj.Text or ""):lower()
-                for _, pattern in ipairs(StaffDetector.indicators.overheadTags) do
-                    if text:find(pattern) then
-                        return true, "Tag: " .. obj.Text
-                    end
-                end
-            end
-        end
-    end
-    
-    return false, nil
-end
-
-local function scanForStaff()
-    local foundNew = false
-    for _, player in ipairs(Players:GetPlayers()) do
-        local isStaff, reason = checkIfStaff(player)
-        if isStaff and not StaffDetector.detectedStaff[player.UserId] then
-            StaffDetector.detectedStaff[player.UserId] = {
-                name = player.Name,
-                displayName = player.DisplayName,
-                reason = reason,
-                detectedAt = os.date("%X")
-            }
-            foundNew = true
-            pcall(function()
-                Rayfield:Notify({
-                    Title = "Staff Detected!",
-                    Content = player.Name .. " | Reason: " .. reason,
-                    Duration = 5,
-                    Image = 4483362458,
-                })
-            end)
-            if State.toggles.autoEnableAntiStaff then
-                if not State.toggles.antiStaffKick1 then
-                    State.toggles.antiStaffKick1 = true
-                    pcall(function()
-                        if AntiStaffKickToggle and type(AntiStaffKickToggle.Set) == "function" then
-                            AntiStaffKickToggle:Set(true)
-                        end
-                    end)
-                    pcall(function()
-                        Rayfield:Notify({
-                            Title = "Auto-Protection",
-                            Content = "Anti-Staff Kick auto-enabled!",
-                            Duration = 3,
-                            Image = 4483362458,
-                        })
-                    end)
-                end
-            end
-        end
-    end
-    return foundNew
-end
-
-local function getDetectedStaffList()
-    local list = {}
-    for uid, data in pairs(StaffDetector.detectedStaff) do
-        table.insert(list, data.name .. " (" .. data.reason .. ")")
-    end
-    return list
-end
 
 -- ==================== ANTI STAFF KICK SYSTEM ====================
-local function getCallerTrace()
-    local trace = "Unknown"
-    pcall(function()
-        if debug and debug.traceback then
-            local raw = debug.traceback("", 3)
-            trace = raw:match("Script '([^']+)'") or raw:sub(1, 80)
-        end
-    end)
-    return trace
-end
-
 local function LoadAntiKick()
     local success, err = pcall(function()
         local function checkCall()
@@ -233,13 +107,12 @@ local function LoadAntiKick()
                 local method = getnamecallmethod()
                 if self == plr and (string.lower(method) == "kick" or method == "Kick") and not checkCall() then
                     if State.toggles.antiStaffKick1 then
-                        local trace = getCallerTrace()
-                        warn("[Kyypie Hub] BLOCKED STAFF KICK via __namecall | Source: " .. tostring(trace))
+                        warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via namecall.")
                         pcall(function()
                             Rayfield:Notify({
-                                Title = "Kick Blocked!",
-                                Content = "Staff attempted to kick you! Blocked successfully.",
-                                Duration = 5,
+                                Title = "Anti Staff Kick",
+                                Content = "Blocked a kick attempt from staff!",
+                                Duration = 4,
                                 Image = 4483362458,
                             })
                         end)
@@ -254,13 +127,12 @@ local function LoadAntiKick()
             local oldKick
             oldKick = hookfunction(plr.Kick, newcclosure(function(self, ...)
                 if State.toggles.antiStaffKick1 then
-                    local trace = getCallerTrace()
-                    warn("[Kyypie Hub] BLOCKED STAFF KICK via function | Source: " .. tostring(trace))
+                    warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via function.")
                     pcall(function()
                         Rayfield:Notify({
-                            Title = "Kick Blocked!",
-                            Content = "Staff attempted to kick you! Blocked successfully.",
-                            Duration = 5,
+                            Title = "Anti Staff Kick",
+                            Content = "Blocked a kick attempt from staff!",
+                            Duration = 4,
                             Image = 4483362458,
                         })
                     end)
@@ -279,6 +151,72 @@ local function LoadAntiKick()
 end
 
 LoadAntiKick()
+
+-- ==================== AUTO RE-EXECUTE ON REJOIN ====================
+local function SetupAutoReexecute()
+    local queueFunc = queue_on_teleport 
+        or (syn and syn.queue_on_teleport) 
+        or (fluxus and fluxus.queue_on_teleport)
+        or (krnl and krnl.queue_on_teleport)
+        or (electron and electron.queue_on_teleport)
+        or (codex and codex.queue_on_teleport)
+        or (oxygen and oxygen.queue_on_teleport)
+        or (wave and wave.queue_on_teleport)
+        or (delta and delta.queue_on_teleport)
+        or (hydrogen and hydrogen.queue_on_teleport)
+        or (trigon and trigon.queue_on_teleport)
+    
+    if not queueFunc then
+        warn("[Kyypie Hub] Auto re-execute not supported on this executor.")
+        return
+    end
+    
+    local scriptSource = nil
+    
+    -- Attempt 1: getscriptsource (Synapse X, Script-Ware, etc.)
+    if getscriptsource then
+        pcall(function()
+            scriptSource = getscriptsource(script)
+        end)
+    end
+    
+    -- Attempt 2: decompile (Krnl, some others)
+    if not scriptSource and decompile then
+        pcall(function()
+            scriptSource = decompile(script)
+        end)
+    end
+    
+    -- Attempt 3: getscriptclosure source (some executors)
+    if not scriptSource and getscriptclosure then
+        pcall(function()
+            local closure = getscriptclosure(script)
+            if closure then
+                scriptSource = debug.getinfo(closure).source
+            end
+        end)
+    end
+    
+    if not scriptSource or scriptSource == "" then
+        warn("[Kyypie Hub] Auto re-execute: Could not capture script source dynamically.")
+        warn("[Kyypie Hub] Tip: For guaranteed auto-reexecute, host the script online and use:")
+        warn("[Kyypie Hub]   loadstring(game:HttpGet('YOUR_RAW_URL'))()")
+        return
+    end
+    
+    pcall(function()
+        queueFunc(scriptSource)
+        print("[Kyypie Hub] Auto re-execute enabled. Script will automatically re-run on teleport/rejoin.")
+        Rayfield:Notify({
+            Title = "Auto Re-Execute",
+            Content = "Script will re-run automatically when you rejoin or teleport!",
+            Duration = 3,
+            Image = 4483362458,
+        })
+    end)
+end
+
+SetupAutoReexecute()
 
 -- ==================== REMOTES ====================
 local Remotes
@@ -545,7 +483,7 @@ local function parseHealthText(text)
         if suffix == "K" then mult = 1e3; s = s:sub(1, -2)
         elseif suffix == "M" then mult = 1e6; s = s:sub(1, -2)
         elseif suffix == "B" then mult = 1e9; s = s:sub(1, -2) end
-        local n = tonumber(s)
+                local n = tonumber(s)
         return n and n * mult or nil
     end
     return toNum(curStr), toNum(maxStr)
@@ -1375,31 +1313,6 @@ task.spawn(function()
     end
 end)
 
--- ==================== STAFF SCANNER DAEMON ====================
-task.spawn(function()
-    task.wait(2)
-    scanForStaff()
-    while true do
-        task.wait(StaffDetector.scanInterval)
-        pcall(scanForStaff)
-    end
-end)
-
-Players.PlayerAdded:Connect(function(player)
-    task.wait(1)
-    pcall(function()
-        local isStaff, reason = checkIfStaff(player)
-        if isStaff then
-            Rayfield:Notify({
-                Title = "Staff Joined!",
-                Content = player.Name .. " | " .. reason,
-                Duration = 5,
-                Image = 4483362458,
-            })
-        end
-    end)
-end)
-
 -- ==================== UI: MAIN ====================
 local MainTab = Window:CreateTab("Main", 84342305212226)
 MainTab:CreateSection("Auto Farm")
@@ -1526,7 +1439,6 @@ local PotionDropdown = MainTab:CreateDropdown({
     end,
 })
 
--- Note: Amount input kept for UI consistency but BoostService does not use amounts
 local PotionAmountInput = MainTab:CreateInput({
     Name = "Amount to Use",
     PlaceholderText = "1",
@@ -1661,38 +1573,6 @@ local AntiStaffKickToggle = SettingsTab:CreateToggle({
     end,
 })
 
-local AutoEnableAntiStaffToggle = SettingsTab:CreateToggle({
-    Name = "Auto Enable on Staff Detect",
-    CurrentValue = true,
-    Flag = "autoEnableAntiStaff",
-    Callback = function(Value)
-        State.toggles.autoEnableAntiStaff = Value
-    end,
-})
-
-SettingsTab:CreateButton({
-    Name = "View Detected Staff",
-    Callback = function()
-        local staffList = getDetectedStaffList()
-        if #staffList == 0 then
-            Rayfield:Notify({
-                Title = "Staff Scanner",
-                Content = "No staff detected in this server.",
-                Duration = 3,
-                Image = 4483362458,
-            })
-        else
-            local msg = table.concat(staffList, "\n")
-            Rayfield:Notify({
-                Title = "Detected Staff (" .. #staffList .. ")",
-                Content = msg:sub(1, 100) .. (#msg > 100 and "..." or ""),
-                Duration = 5,
-                Image = 4483362458,
-            })
-        end
-    end,
-})
-
 local Themes = SettingsTab:CreateDropdown({
     Name = "Themes",
     Options = {"Default", "AmberGlow", "Amethyst", "Bloom", "DarkBlue", "Green", "Light", "Ocean", "Serenity"},
@@ -1773,7 +1653,6 @@ plr.CharacterAdded:Connect(function()
 end)
 
 -- ==================== INITIALIZATION ====================
--- Auto loads your config when the script starts
 pcall(function()
     Rayfield:LoadConfiguration()
 end)
