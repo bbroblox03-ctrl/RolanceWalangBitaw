@@ -6,7 +6,7 @@ local Window = Rayfield:CreateWindow({
    LoadingTitle = "Kyype Hub",
    LoadingSubtitle = "by Markyy",
    ShowText = "Mahenang Rolance",
-   Theme = "Ocean",
+   Theme = "AmberGlow",
    ToggleUIKeybind = "K",
    ConfigurationSaving = {
       Enabled = true,
@@ -40,11 +40,49 @@ local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
 
 local plr = Players.LocalPlayer
 local cam = Workspace.CurrentCamera
+
+-- ==================== ANTI KICK SYSTEM ====================
+local function LoadAntiKick()
+    local success, err = pcall(function()
+        local function checkCall()
+            if typeof(checkcaller) == "function" then
+                return checkcaller()
+            end
+            return false
+        end
+
+        if typeof(hookmetamethod) == "function" and typeof(newcclosure) == "function" then
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                if self == plr and (string.lower(method) == "kick" or method == "Kick") and not checkCall() then
+                    warn("[Kyypie Hub] Intercepted and blocked client-side namecall Kick.")
+                    return task.wait(9e9)
+                end
+                return oldNamecall(self, ...)
+            end))
+        end
+
+        if typeof(hookfunction) == "function" and typeof(newcclosure) == "function" then
+            local oldKick
+            oldKick = hookfunction(plr.Kick, newcclosure(function(self, ...)
+                warn("[Kyypie Hub] Intercepted and blocked client-side function Kick.")
+                return task.wait(9e9)
+            end))
+        end
+    end)
+
+    if success then
+        print("[Kyypie] Anti-Kick successfully armed.")
+    else
+        warn("[Kyypie] Anti-Kick failed to arm: " .. tostring(err))
+    end
+end
+
+LoadAntiKick()
 
 -- ==================== REMOTES ====================
 local Remotes
@@ -140,9 +178,6 @@ local State = {
     selectedPotion = "Luck Boost",
     lastPotionTime = 0,
     potionCooldown = 2,
-    walkSpeed = 16,
-    configName = "",
-    autoLoadConfigName = "Default",
     toggles = {
         auto1 = false,
         auto2 = false,
@@ -154,12 +189,6 @@ local State = {
         autoRoll1 = false,
         fastRoll1 = false,
         autoPotion1 = false,
-        antiKick = false,
-        antiIdle = false,
-        noclip = false,
-        infiniteJump = false,
-        autoSaveConfig = false,
-        autoLoadConfig = false,
     }
 }
 
@@ -867,202 +896,6 @@ local function interactWithFruit(fruit)
     return false
 end
 
--- ==================== ANTI KICK (FIXED) ====================
-local antiKickEnabled = false
-
-local function setupAntiKick()
-    local ok, err = pcall(function()
-        local mt = getrawmetatable(game)
-        if not mt then
-            warn("[KyypieHub] getrawmetatable returned nil. AntiKick unavailable.")
-            return
-        end
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if method == "Kick" and self == plr and antiKickEnabled then
-                warn("[KyypieHub] AntiKick: Blocked server kick attempt.")
-                return nil
-            end
-            return oldNamecall(self, ...)
-        end)
-        
-        setreadonly(mt, true)
-    end)
-    if not ok then
-        warn("[KyypieHub] AntiKick setup error: " .. tostring(err))
-    else
-        print("[KyypieHub] AntiKick system initialized.")
-    end
-end
-
--- ==================== ANTI IDLE ====================
-local antiIdleEnabled = false
-
--- ==================== NO CLIP ====================
-local noclipConnection
-local function setNoclip(enabled)
-    if enabled then
-        if noclipConnection then noclipConnection:Disconnect() end
-        noclipConnection = RunService.Stepped:Connect(function()
-            local char = getChar()
-            if char then
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        part.CanCollide = false
-                    end
-                end
-            end
-        end)
-    else
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
-        end
-        local char = getChar()
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CanCollide = true
-                end
-            end
-        end
-    end
-end
-
--- ==================== INFINITE JUMP ====================
-local infiniteJumpConnection
-local function setInfiniteJump(enabled)
-    if enabled then
-        if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
-        infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
-            local hum = getHum()
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-    else
-        if infiniteJumpConnection then
-            infiniteJumpConnection:Disconnect()
-            infiniteJumpConnection = nil
-        end
-    end
-end
-
--- ==================== CONFIG SYSTEM ====================
-local configFolder = "KyypieHub/Configs"
-
-local function ensureConfigFolder()
-    pcall(function()
-        if not isfolder("KyypieHub") then
-            makefolder("KyypieHub")
-        end
-        if not isfolder(configFolder) then
-            makefolder(configFolder)
-        end
-    end)
-end
-
-local function getConfigNames()
-    local names = {}
-    pcall(function()
-        for _, file in ipairs(listfiles(configFolder)) do
-            local name = file:match("([^/\\]+)%.json$")
-            if name then
-                table.insert(names, name)
-            end
-        end
-    end)
-    return names
-end
-
-local function saveConfig(name)
-    ensureConfigFolder()
-    if not name or name == "" then name = "Default" end
-    local data = {
-        toggles = State.toggles,
-        fruitRadius = State.fruitCollectionRadius,
-        selectedPotion = State.selectedPotion,
-        espColor = {R = State.espColor.R, G = State.espColor.G, B = State.espColor.B},
-        espMode = State.espMode,
-        walkSpeed = State.walkSpeed,
-        autoLoadConfigName = State.autoLoadConfigName,
-    }
-    local success, err = pcall(function()
-        writefile(configFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
-    end)
-    if success then
-        Rayfield:Notify({Title = "Config Saved", Content = "Saved as: " .. name, Duration = 3, Image = 4483362458})
-    else
-        Rayfield:Notify({Title = "Config Error", Content = tostring(err), Duration = 3, Image = 4483362458})
-    end
-    return success
-end
-
-local function loadConfig(name)
-    local success, data = pcall(function()
-        local content = readfile(configFolder .. "/" .. name .. ".json")
-        return HttpService:JSONDecode(content)
-    end)
-    if not success or not data then
-        Rayfield:Notify({Title = "Config Error", Content = "Failed to load " .. name, Duration = 3, Image = 4483362458})
-        return false
-    end
-    
-    for key, value in pairs(data.toggles or {}) do
-        if State.toggles[key] ~= nil then
-            State.toggles[key] = value
-        end
-    end
-    
-    if data.fruitRadius then State.fruitCollectionRadius = data.fruitRadius end
-    if data.selectedPotion then State.selectedPotion = data.selectedPotion end
-    if data.espColor then State.espColor = Color3.new(data.espColor.R, data.espColor.G, data.espColor.B) end
-    if data.espMode then State.espMode = data.espMode end
-    if data.walkSpeed then
-        State.walkSpeed = data.walkSpeed
-        local hum = getHum()
-        if hum then hum.WalkSpeed = State.walkSpeed end
-    end
-    if data.autoLoadConfigName then State.autoLoadConfigName = data.autoLoadConfigName end
-    
-    if State.toggles.noclip then setNoclip(true) else setNoclip(false) end
-    if State.toggles.infiniteJump then setInfiniteJump(true) else setInfiniteJump(false) end
-    
-    antiKickEnabled = State.toggles.antiKick or false
-    antiIdleEnabled = State.toggles.antiIdle or false
-    
-    pcall(function()
-        if HumanizerToggle then HumanizerToggle:Set(State.toggles.humanizer1) end
-        if FarmToggle then FarmToggle:Set(State.toggles.auto1) end
-        if CollectToggle then CollectToggle:Set(State.toggles.auto2) end
-        if FruitToggle then FruitToggle:Set(State.toggles.autoFruit1) end
-        if AutoZoneToggle then AutoZoneToggle:Set(State.toggles.autoZone1) end
-        if AutoRollToggle then AutoRollToggle:Set(State.toggles.autoRoll1) end
-        if FastRollToggle then FastRollToggle:Set(State.toggles.fastRoll1) end
-        if AutoPotionToggle then AutoPotionToggle:Set(State.toggles.autoPotion1) end
-        if AutoBlasterToggle then AutoBlasterToggle:Set(State.toggles.autoBlaster1) end
-        if ESPToggle then ESPToggle:Set(State.toggles.esp1) end
-        if FruitRadiusSlider then FruitRadiusSlider:Set(State.fruitCollectionRadius) end
-        if Slider then Slider:Set(State.walkSpeed or 16) end
-        if PotionDropdown then PotionDropdown:Set({State.selectedPotion}) end
-        if ESPColorPicker then ESPColorPicker:Set(State.espColor) end
-        if ESPModeDropdown then ESPModeDropdown:Set(State.espMode) end
-        if AntiKickToggle then AntiKickToggle:Set(State.toggles.antiKick or false) end
-        if AntiIdleToggle then AntiIdleToggle:Set(State.toggles.antiIdle or false) end
-        if NoclipToggle then NoclipToggle:Set(State.toggles.noclip or false) end
-        if InfJumpToggle then InfJumpToggle:Set(State.toggles.infiniteJump or false) end
-        if AutoSaveToggle then AutoSaveToggle:Set(State.toggles.autoSaveConfig or false) end
-        if AutoLoadToggle then AutoLoadToggle:Set(State.toggles.autoLoadConfig or false) end
-        if AutoLoadNameInput then AutoLoadNameInput:Set(State.autoLoadConfigName or "Default") end
-    end)
-    
-    Rayfield:Notify({Title = "Config Loaded", Content = "Loaded: " .. name, Duration = 3, Image = 4483362458})
-    return true
-end
-
 -- ==================== MAIN DAEMON ====================
 task.spawn(function()
     while true do
@@ -1398,7 +1231,6 @@ local Slider = MainTab:CreateSlider({
     CurrentValue = 16,
     Flag = "ws1",
     Callback = function(Value)
-        State.walkSpeed = Value
         local hum = getHum()
         if hum then hum.WalkSpeed = Value end
     end,
@@ -1571,138 +1403,42 @@ local Themes = SettingsTab:CreateDropdown({
     end,
 })
 
-local Paragraph = SettingsTab:CreateParagraph({
-    Title = "How to use",
-    Content = "Auto Roll uses requestRoll remote. Fast Roll spams with no delay. Auto Potion uses requestUseBoost remote every 2 seconds."
-})
+-- ==================== CONFIGURATION INTERFACE ====================
+SettingsTab:CreateSection("Configuration Manager")
 
--- ==================== CONFIGURATION SECTION ====================
-SettingsTab:CreateSection("Configuration")
-
-local ConfigNameInput = SettingsTab:CreateInput({
-    Name = "Config Name",
-    PlaceholderText = "MyConfig",
-    RemoveTextAfterFocusLost = false,
-    Flag = "configName1",
-    Callback = function(Text)
-        State.configName = Text
-    end,
-})
-
-local SaveConfigBtn = SettingsTab:CreateButton({
-    Name = "Save Config",
-    Callback = function()
-        local name = State.configName or "Default"
-        if name == "" then name = "Default" end
-        saveConfig(name)
-    end,
-})
-
-local ConfigDropdown = SettingsTab:CreateDropdown({
-    Name = "Load Config",
-    Options = getConfigNames(),
-    CurrentOption = {},
-    MultipleOptions = false,
-    Flag = "configLoad1",
-    Callback = function(Option)
-        local name = Option[1] or Option
-        if name and name ~= "" then
-            loadConfig(name)
-        end
-    end,
-})
-
-local RefreshConfigsBtn = SettingsTab:CreateButton({
-    Name = "Refresh Config List",
+SettingsTab:CreateButton({
+    Name = "Save Current Config",
     Callback = function()
         pcall(function()
-            ConfigDropdown:Refresh(getConfigNames())
+            Rayfield:SaveConfiguration()
+            Rayfield:Notify({
+                Title = "Config Saved",
+                Content = "Your current configuration has been saved.",
+                Duration = 2,
+                Image = 4483362458
+            })
         end)
     end,
 })
 
-local AutoSaveToggle = SettingsTab:CreateToggle({
-    Name = "Auto Save Config",
-    CurrentValue = false,
-    Flag = "autoSaveConfig1",
-    Callback = function(Value)
-        State.toggles.autoSaveConfig = Value
+SettingsTab:CreateButton({
+    Name = "Load Saved Config",
+    Callback = function()
+        pcall(function()
+            Rayfield:LoadConfiguration()
+            Rayfield:Notify({
+                Title = "Config Loaded",
+                Content = "Saved configuration loaded successfully.",
+                Duration = 2,
+                Image = 4483362458
+            })
+        end)
     end,
 })
 
--- ==================== AUTO LOAD CONFIG ====================
-SettingsTab:CreateSection("Auto Load")
-
-local AutoLoadNameInput = SettingsTab:CreateInput({
-    Name = "Auto Load Config Name",
-    PlaceholderText = "Default",
-    RemoveTextAfterFocusLost = false,
-    Flag = "autoLoadName1",
-    Callback = function(Text)
-        State.autoLoadConfigName = Text
-    end,
-})
-
-local AutoLoadToggle = SettingsTab:CreateToggle({
-    Name = "Auto Load Config on Start",
-    CurrentValue = false,
-    Flag = "autoLoadConfig1",
-    Callback = function(Value)
-        State.toggles.autoLoadConfig = Value
-        State.autoLoadConfig = Value
-    end,
-})
-
--- ==================== PLAYER SAFETY SECTION ====================
-SettingsTab:CreateSection("Player Safety")
-
-local AntiKickToggle = SettingsTab:CreateToggle({
-    Name = "Anti Kick",
-    CurrentValue = false,
-    Flag = "antiKick1",
-    Callback = function(Value)
-        antiKickEnabled = Value
-        State.toggles.antiKick = Value
-        if Value then
-            Rayfield:Notify({Title = "Anti Kick", Content = "Enabled - kick attempts will be blocked", Duration = 3, Image = 4483362458})
-        end
-    end,
-})
-
-local AntiIdleToggle = SettingsTab:CreateToggle({
-    Name = "Anti Idle",
-    CurrentValue = false,
-    Flag = "antiIdle1",
-    Callback = function(Value)
-        antiIdleEnabled = Value
-        State.toggles.antiIdle = Value
-        if Value then
-            Rayfield:Notify({Title = "Anti Idle", Content = "Enabled - idle kicks prevented", Duration = 3, Image = 4483362458})
-        end
-    end,
-})
-
--- ==================== MOVEMENT SECTION ====================
-SettingsTab:CreateSection("Movement")
-
-local NoclipToggle = SettingsTab:CreateToggle({
-    Name = "No Clip",
-    CurrentValue = false,
-    Flag = "noclip1",
-    Callback = function(Value)
-        State.toggles.noclip = Value
-        setNoclip(Value)
-    end,
-})
-
-local InfJumpToggle = SettingsTab:CreateToggle({
-    Name = "Infinite Jump",
-    CurrentValue = false,
-    Flag = "infJump1",
-    Callback = function(Value)
-        State.toggles.infiniteJump = Value
-        setInfiniteJump(Value)
-    end,
+local Paragraph = SettingsTab:CreateParagraph({
+    Title = "How to use",
+    Content = "Auto Roll uses requestRoll remote. Fast Roll spams with no delay. Auto Potion uses requestUseBoost remote every 2 seconds."
 })
 
 -- ==================== BACKGROUND ====================
@@ -1729,42 +1465,10 @@ plr.CharacterAdded:Connect(function()
     setE(false)
     hidePathRay()
     hideFruitRay()
-    task.wait(0.1)
-    local hum = getHum()
-    if hum and State.walkSpeed then hum.WalkSpeed = State.walkSpeed end
 end)
 
--- ==================== ANTI IDLE CONNECTION ====================
-plr.Idled:Connect(function()
-    if antiIdleEnabled then
-        local VirtualUser = game:GetService("VirtualUser")
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton1(Vector2.new(math.random(10, 100), math.random(10, 100)), workspace.CurrentCamera.CFrame)
-    end
-end)
-
--- ==================== ANTI KICK SETUP ====================
-setupAntiKick()
-
--- ==================== AUTO SAVE DAEMON ====================
-task.spawn(function()
-    while true do
-        pcall(function()
-            if State.toggles.autoSaveConfig then
-                saveConfig("AutoSave")
-            end
-        end)
-        task.wait(30)
-    end
-end)
-
--- ==================== AUTO LOAD CONFIG ON START ====================
-task.delay(3, function()
-    pcall(function()
-        if State.toggles.autoLoadConfig then
-            local name = State.autoLoadConfigName
-            if not name or name == "" then name = "Default" end
-            loadConfig(name)
-        end
-    end)
+-- ==================== INITIALIZATION ====================
+-- Auto loads your config when the script starts
+pcall(function()
+    Rayfield:LoadConfiguration()
 end)
