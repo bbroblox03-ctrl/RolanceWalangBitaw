@@ -40,11 +40,58 @@ local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local plr = Players.LocalPlayer
 local cam = Workspace.CurrentCamera
 
--- ==================== ANTI KICK SYSTEM ====================
+-- ==================== STATE ====================
+local State = {
+    humanizer = false,
+    espEnabled = false,
+    espColor = Color3.fromRGB(0, 150, 255),
+    espMode = {},
+    lastJump = 0,
+    currentZoneNum = -1,
+    zoneSpawnPos = nil,
+    lastZoneScan = 0,
+    isTravelingToZone = false,
+    zoneCooldownEnd = 0,
+    zoneArrivalTime = 0,
+    hasArrivedAtZone = false,
+    activeTask = "idle",
+    lastEnemyMove = 0,
+    lastLootETime = 0,
+    lastM1Time = 0,
+    m1Down = false,
+    eDown = false,
+    lastFruitETime = 0,
+    fruitCollectionRadius = 50,
+    lastFruitScan = 0,
+    cachedFruits = {},
+    fruitScanInterval = 0.5,
+    lastRollTime = 0,
+    selectedPotion = "Luck Boost",
+    lastPotionTime = 0,
+    potionCooldown = 2,
+    toggles = {
+        auto1 = false,
+        auto2 = false,
+        autoFruit1 = false,
+        autoZone1 = false,
+        autoBlaster1 = false,
+        humanizer1 = false,
+        esp1 = false,
+        autoRoll1 = false,
+        fastRoll1 = false,
+        autoPotion1 = false,
+        noclip1 = false,
+        infJump1 = false,
+        antiStaffKick1 = true,
+    }
+}
+
+-- ==================== ANTI STAFF KICK SYSTEM ====================
 local function LoadAntiKick()
     local success, err = pcall(function()
         local function checkCall()
@@ -59,8 +106,18 @@ local function LoadAntiKick()
             oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
                 local method = getnamecallmethod()
                 if self == plr and (string.lower(method) == "kick" or method == "Kick") and not checkCall() then
-                    warn("[Kyypie Hub] Intercepted and blocked client-side namecall Kick.")
-                    return task.wait(9e9)
+                    if State.toggles.antiStaffKick1 then
+                        warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via namecall.")
+                        pcall(function()
+                            Rayfield:Notify({
+                                Title = "Anti Staff Kick",
+                                Content = "Blocked a kick attempt from staff!",
+                                Duration = 4,
+                                Image = 4483362458,
+                            })
+                        end)
+                        return task.wait(9e9)
+                    end
                 end
                 return oldNamecall(self, ...)
             end))
@@ -69,16 +126,27 @@ local function LoadAntiKick()
         if typeof(hookfunction) == "function" and typeof(newcclosure) == "function" then
             local oldKick
             oldKick = hookfunction(plr.Kick, newcclosure(function(self, ...)
-                warn("[Kyypie Hub] Intercepted and blocked client-side function Kick.")
-                return task.wait(9e9)
+                if State.toggles.antiStaffKick1 then
+                    warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via function.")
+                    pcall(function()
+                        Rayfield:Notify({
+                            Title = "Anti Staff Kick",
+                            Content = "Blocked a kick attempt from staff!",
+                            Duration = 4,
+                            Image = 4483362458,
+                        })
+                    end)
+                    return task.wait(9e9)
+                end
+                return oldKick(self, ...)
             end))
         end
     end)
 
     if success then
-        print("[Kyypie] Anti-Kick successfully armed.")
+        print("[Kyypie] Anti-Staff Kick successfully armed.")
     else
-        warn("[Kyypie] Anti-Kick failed to arm: " .. tostring(err))
+        warn("[Kyypie] Anti-Staff Kick failed to arm: " .. tostring(err))
     end
 end
 
@@ -149,48 +217,9 @@ local function getFlag(name)
     return false
 end
 
--- ==================== STATE ====================
-local State = {
-    humanizer = false,
-    espEnabled = false,
-    espColor = Color3.fromRGB(0, 150, 255),
-    espMode = {},
-    lastJump = 0,
-    currentZoneNum = -1,
-    zoneSpawnPos = nil,
-    lastZoneScan = 0,
-    isTravelingToZone = false,
-    zoneCooldownEnd = 0,
-    zoneArrivalTime = 0,
-    hasArrivedAtZone = false,
-    activeTask = "idle",
-    lastEnemyMove = 0,
-    lastLootETime = 0,
-    lastM1Time = 0,
-    m1Down = false,
-    eDown = false,
-    lastFruitETime = 0,
-    fruitCollectionRadius = 50,
-    lastFruitScan = 0,
-    cachedFruits = {},
-    fruitScanInterval = 0.5,
-    lastRollTime = 0,
-    selectedPotion = "Luck Boost",
-    lastPotionTime = 0,
-    potionCooldown = 2,
-    toggles = {
-        auto1 = false,
-        auto2 = false,
-        autoFruit1 = false,
-        autoZone1 = false,
-        autoBlaster1 = false,
-        humanizer1 = false,
-        esp1 = false,
-        autoRoll1 = false,
-        fastRoll1 = false,
-        autoPotion1 = false,
-    }
-}
+-- ==================== NO CLIP & INFINITE JUMP CONNECTIONS ====================
+local noclipConnection = nil
+local infiniteJumpConnection = nil
 
 -- ==================== INPUT HELPERS ====================
 local function fireSlimeGun(model)
@@ -284,6 +313,54 @@ local function distToPos(pos)
     return (hrp.Position - pos).Magnitude
 end
 local function rng(a, b) return a + math.random() * (b - a) end
+
+-- ==================== NO CLIP ====================
+local function setNoclip(enabled)
+    if enabled then
+        if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = RunService.Stepped:Connect(function()
+            local char = getChar()
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+        local char = getChar()
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- ==================== INFINITE JUMP ====================
+local function setInfiniteJump(enabled)
+    if enabled then
+        if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
+        infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
+            local hum = getHum()
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    else
+        if infiniteJumpConnection then
+            infiniteJumpConnection:Disconnect()
+            infiniteJumpConnection = nil
+        end
+    end
+end
 
 -- ==================== ZONE HELPERS ====================
 local function getHighestOwnedZone()
@@ -1392,6 +1469,45 @@ local ESPColorPicker = VisualsTab:CreateColorPicker({
 -- ==================== UI: SETTINGS ====================
 local SettingsTab = Window:CreateTab("Settings", 80758916183665)
 
+SettingsTab:CreateSection("Movement")
+
+local NoclipToggle = SettingsTab:CreateToggle({
+    Name = "No Clip",
+    CurrentValue = false,
+    Flag = "noclip1",
+    Callback = function(Value)
+        State.toggles.noclip1 = Value
+        setNoclip(Value)
+    end,
+})
+
+local InfJumpToggle = SettingsTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Flag = "infJump1",
+    Callback = function(Value)
+        State.toggles.infJump1 = Value
+        setInfiniteJump(Value)
+    end,
+})
+
+SettingsTab:CreateSection("Security")
+
+local AntiStaffKickToggle = SettingsTab:CreateToggle({
+    Name = "Anti Staff Kick",
+    CurrentValue = true,
+    Flag = "antiStaffKick1",
+    Callback = function(Value)
+        State.toggles.antiStaffKick1 = Value
+        Rayfield:Notify({
+            Title = "Anti Staff Kick",
+            Content = Value and "Protection enabled." or "Protection disabled.",
+            Duration = 2,
+            Image = 4483362458,
+        })
+    end,
+})
+
 local Themes = SettingsTab:CreateDropdown({
     Name = "Themes",
     Options = {"Default", "AmberGlow", "Amethyst", "Bloom", "DarkBlue", "Green", "Light", "Ocean", "Serenity"},
@@ -1465,6 +1581,10 @@ plr.CharacterAdded:Connect(function()
     setE(false)
     hidePathRay()
     hideFruitRay()
+    if State.toggles.noclip1 then
+        task.wait(0.3)
+        setNoclip(true)
+    end
 end)
 
 -- ==================== INITIALIZATION ====================
