@@ -6,7 +6,7 @@ local Window = Rayfield:CreateWindow({
    LoadingTitle = "Kyype Hub",
    LoadingSubtitle = "by Markyy",
    ShowText = "Mahenang Rolance",
-   Theme = "Light",
+   Theme = "AmberGlow",
    ToggleUIKeybind = "K",
    ConfigurationSaving = {
       Enabled = true,
@@ -40,10 +40,61 @@ local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 
 local plr = Players.LocalPlayer
 local cam = Workspace.CurrentCamera
+
+-- ==================== UNDETECTABLE ANTI KICK SYSTEM ====================
+local function LoadAntiKick()
+    local success, err = pcall(function()
+        local function checkCall()
+            if typeof(checkcaller) == "function" then
+                return checkcaller()
+            end
+            return false
+        end
+
+        if typeof(hookmetamethod) == "function" and typeof(newcclosure) == "function" then
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                -- Strictly verify self == plr to bypass detection checks (like workspace:Kick() or other non-player calls)
+                if self == plr and (string.lower(method) == "kick" or method == "Kick") and not checkCall() then
+                    warn("[Kyypie Hub] Intercepted and blocked client-side namecall Kick.")
+                    return task.wait(9e9)
+                end
+                return oldNamecall(self, ...)
+            end))
+
+            local oldIndex
+            oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+                -- Block and spoof index-based kick attempts
+                if self == plr and tostring(key):lower() == "kick" then
+                    return newcclosure(function(calledSelf, ...)
+                        if calledSelf == plr then
+                            warn("[Kyypie Hub] Intercepted and blocked client-side index Kick.")
+                            return task.wait(9e9)
+                        end
+                        -- spoof native Roblox error when called on non-player instances to bypass detection
+                        return error("Expected ':' not '.' calling member function Kick", 2)
+                    end)
+                end
+                return oldIndex(self, key)
+            end))
+        end
+    end)
+
+    if success then
+        print("[Kyypie] Undetectable Anti-Kick armed.")
+    else
+        warn("[Kyypie] Undetectable Anti-Kick failed to arm: " .. tostring(err))
+    end
+end
+
+LoadAntiKick()
 
 -- ==================== STATE ====================
 local State = {
@@ -74,6 +125,8 @@ local State = {
     selectedPotion = "Luck Boost",
     lastPotionTime = 0,
     potionCooldown = 2,
+    loaderScript = "",
+    staffAction = "Server Hop",
     toggles = {
         auto1 = false,
         auto2 = false,
@@ -85,207 +138,230 @@ local State = {
         autoRoll1 = false,
         fastRoll1 = false,
         autoPotion1 = false,
-        noclip1 = false,
-        infJump1 = false,
-        antiStaffKick1 = true,
+        autoRejoin1 = false,
+        staffDetect1 = false,
     }
 }
 
--- ==================== ANTI STAFF KICK SYSTEM ====================
-local function LoadAntiKick()
-    local success, err = pcall(function()
-        local function checkCall()
-            if typeof(checkcaller) == "function" then
-                return checkcaller()
-            end
-            return false
-        end
-
-        if typeof(hookmetamethod) == "function" and typeof(newcclosure) == "function" then
-            local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if self == plr and (string.lower(method) == "kick" or method == "Kick") and not checkCall() then
-                    if State.toggles.antiStaffKick1 then
-                        warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via namecall.")
-                        pcall(function()
-                            Rayfield:Notify({
-                                Title = "Anti Staff Kick",
-                                Content = "Blocked a kick attempt from staff!",
-                                Duration = 4,
-                                Image = 4483362458,
-                            })
-                        end)
-                        return task.wait(9e9)
-                    end
-                end
-                return oldNamecall(self, ...)
-            end))
-        end
-
-        if typeof(hookfunction) == "function" and typeof(newcclosure) == "function" then
-            local oldKick
-            oldKick = hookfunction(plr.Kick, newcclosure(function(self, ...)
-                if State.toggles.antiStaffKick1 then
-                    warn("[Kyypie Hub] Intercepted and blocked staff kick attempt via function.")
-                    pcall(function()
-                        Rayfield:Notify({
-                            Title = "Anti Staff Kick",
-                            Content = "Blocked a kick attempt from staff!",
-                            Duration = 4,
-                            Image = 4483362458,
-                        })
-                    end)
-                    return task.wait(9e9)
-                end
-                return oldKick(self, ...)
-            end))
-        end
-    end)
-
-    if success then
-        print("[Kyypie] Anti-Staff Kick successfully armed.")
-    else
-        warn("[Kyypie] Anti-Staff Kick failed to arm: " .. tostring(err))
-    end
-end
-
-LoadAntiKick()
-
--- ==================== AUTO RE-EXECUTE ON REJOIN ====================
-local function SetupAutoReexecute()
-    local queueFunc = queue_on_teleport 
-        or (syn and syn.queue_on_teleport) 
-        or (fluxus and fluxus.queue_on_teleport)
-        or (krnl and krnl.queue_on_teleport)
-        or (electron and electron.queue_on_teleport)
-        or (codex and codex.queue_on_teleport)
-        or (oxygen and oxygen.queue_on_teleport)
-        or (wave and wave.queue_on_teleport)
-        or (delta and delta.queue_on_teleport)
-        or (hydrogen and hydrogen.queue_on_teleport)
-        or (trigon and trigon.queue_on_teleport)
-    
-    if not queueFunc then
-        warn("[Kyypie Hub] Auto re-execute not supported on this executor.")
-        return
-    end
-    
-    local scriptSource = nil
-    
-    -- Attempt 1: getscriptsource (Synapse X, Script-Ware, etc.)
-    if getscriptsource then
+-- ==================== AUTO REJOIN & SERVER HOP UTILITIES ====================
+local function Rejoin()
+    local queue = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+    if queue and State.loaderScript and State.loaderScript ~= "" then
         pcall(function()
-            scriptSource = getscriptsource(script)
+            queue(State.loaderScript)
         end)
-    end
-    
-    -- Attempt 2: decompile (Krnl, some others)
-    if not scriptSource and decompile then
-        pcall(function()
-            scriptSource = decompile(script)
-        end)
-    end
-    
-    -- Attempt 3: getscriptclosure source (some executors)
-    if not scriptSource and getscriptclosure then
-        pcall(function()
-            local closure = getscriptclosure(script)
-            if closure then
-                scriptSource = debug.getinfo(closure).source
-            end
-        end)
-    end
-    
-    if not scriptSource or scriptSource == "" then
-        warn("[Kyypie Hub] Auto re-execute: Could not capture script source dynamically.")
-        warn("[Kyypie Hub] Tip: For guaranteed auto-reexecute, host the script online and use:")
-        warn("[Kyypie Hub]   loadstring(game:HttpGet('YOUR_RAW_URL'))()")
-        return
     end
     
     pcall(function()
-        queueFunc(scriptSource)
-        print("[Kyypie Hub] Auto re-execute enabled. Script will automatically re-run on teleport/rejoin.")
-        Rayfield:Notify({
-            Title = "Auto Re-Execute",
-            Content = "Script will re-run automatically when you rejoin or teleport!",
-            Duration = 3,
-            Image = 4483362458,
-        })
+        if #Players:GetPlayers() <= 1 then
+            TeleportService:Teleport(game.PlaceId, plr)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
+        end
     end)
 end
 
-SetupAutoReexecute()
-
--- ==================== REMOTES ====================
-local Remotes
-local function GetRemotes()
-    local success, result = pcall(function()
-        return ReplicatedStorage:WaitForChild("Packages", 10)
-            :WaitForChild("_Index", 10)
-            :WaitForChild("leifstout_networker@0.3.1", 10)
-            :WaitForChild("networker", 10)
-            :WaitForChild("_remotes", 10)
+local function serverHop()
+    pcall(function()
+        local servers = {}
+        local req = game:HttpGet("https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true")
+        local body = HttpService:JSONDecode(req)
+        if body and body.data then
+            for _, v in ipairs(body.data) do
+                if v.id ~= game.JobId and tonumber(v.playing) < tonumber(v.maxPlayers) then
+                    table.insert(servers, v.id)
+                end
+            end
+        end
+        if #servers > 0 then
+            local queue = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+            if queue and State.loaderScript and State.loaderScript ~= "" then
+                pcall(function()
+                    queue(State.loaderScript)
+                end)
+            end
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], plr)
+        else
+            Rejoin()
+        end
     end)
-    if success then
-        return result
-    end
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj.Name == "_remotes" and obj:IsA("Folder") then
-            return obj
+end
+
+local function setupAutoRejoin()
+    GuiService.ErrorMessageChanged:Connect(function(errorMessage)
+        if State.toggles.autoRejoin1 then
+            task.wait(2)
+            Rejoin()
+        end
+    end)
+end
+
+-- ==================== STAFF DETECTION UTILITIES ====================
+local savedToggles = nil
+
+local function pauseAutomation()
+    if savedToggles then return end
+    
+    savedToggles = {
+        auto1 = State.toggles.auto1,
+        auto2 = State.toggles.auto2,
+        autoFruit1 = State.toggles.autoFruit1,
+        autoZone1 = State.toggles.autoZone1,
+        autoBlaster1 = State.toggles.autoBlaster1,
+        autoRoll1 = State.toggles.autoRoll1,
+        fastRoll1 = State.toggles.fastRoll1,
+        autoPotion1 = State.toggles.autoPotion1,
+    }
+    
+    State.toggles.auto1 = false
+    State.toggles.auto2 = false
+    State.toggles.autoFruit1 = false
+    State.toggles.autoZone1 = false
+    State.toggles.autoBlaster1 = false
+    State.toggles.autoRoll1 = false
+    State.toggles.fastRoll1 = false
+    State.toggles.autoPotion1 = false
+    
+    if type(FarmToggle) == "table" and type(FarmToggle.Set) == "function" then FarmToggle:Set(false) end
+    if type(CollectToggle) == "table" and type(CollectToggle.Set) == "function" then CollectToggle:Set(false) end
+    if type(FruitToggle) == "table" and type(FruitToggle.Set) == "function" then FruitToggle:Set(false) end
+    if type(AutoZoneToggle) == "table" and type(AutoZoneToggle.Set) == "function" then AutoZoneToggle:Set(false) end
+    if type(AutoBlasterToggle) == "table" and type(AutoBlasterToggle.Set) == "function" then AutoBlasterToggle:Set(false) end
+    if type(AutoRollToggle) == "table" and type(AutoRollToggle.Set) == "function" then AutoRollToggle:Set(false) end
+    if type(FastRollToggle) == "table" and type(FastRollToggle.Set) == "function" then FastRollToggle:Set(false) end
+    if type(AutoPotionToggle) == "table" and type(AutoPotionToggle.Set) == "function" then AutoPotionToggle:Set(false) end
+
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    end)
+    
+    State.activeTask = "idle"
+end
+
+local function resumeAutomation()
+    if not savedToggles then return end
+    
+    State.toggles.auto1 = savedToggles.auto1
+    State.toggles.auto2 = savedToggles.auto2
+    State.toggles.autoFruit1 = savedToggles.autoFruit1
+    State.toggles.autoZone1 = savedToggles.autoZone1
+    State.toggles.autoBlaster1 = savedToggles.autoBlaster1
+    State.toggles.autoRoll1 = savedToggles.autoRoll1
+    State.toggles.fastRoll1 = savedToggles.fastRoll1
+    State.toggles.autoPotion1 = savedToggles.autoPotion1
+    
+    if type(FarmToggle) == "table" and type(FarmToggle.Set) == "function" then FarmToggle:Set(savedToggles.auto1) end
+    if type(CollectToggle) == "table" and type(CollectToggle.Set) == "function" then CollectToggle:Set(savedToggles.auto2) end
+    if type(FruitToggle) == "table" and type(FruitToggle.Set) == "function" then FruitToggle:Set(savedToggles.autoFruit1) end
+    if type(AutoZoneToggle) == "table" and type(AutoZoneToggle.Set) == "function" then AutoZoneToggle:Set(savedToggles.autoZone1) end
+    if type(AutoBlasterToggle) == "table" and type(AutoBlasterToggle.Set) == "function" then AutoBlasterToggle:Set(savedToggles.autoBlaster1) end
+    if type(AutoRollToggle) == "table" and type(AutoRollToggle.Set) == "function" then AutoRollToggle:Set(savedToggles.autoRoll1) end
+    if type(FastRollToggle) == "table" and type(FastRollToggle.Set) == "function" then FastRollToggle:Set(savedToggles.fastRoll1) end
+    if type(AutoPotionToggle) == "table" and type(AutoPotionToggle.Set) == "function" then AutoPotionToggle:Set(savedToggles.autoPotion1) end
+
+    savedToggles = nil
+end
+
+local function isStaff(player)
+    if player == plr then return false end
+    
+    local successCreatorGroup, isGroupCreator = pcall(function()
+        return game.CreatorType == Enum.CreatorType.Group
+    end)
+    
+    if successCreatorGroup and isGroupCreator then
+        local successRank, rank = pcall(function()
+            return player:GetRankInGroup(game.CreatorId)
+        end)
+        if successRank and rank and rank >= 100 then
+            return true, "Group Rank: " .. tostring(rank)
+        end
+        
+        local successRole, role = pcall(function()
+            return player:GetRoleInGroup(game.CreatorId)
+        end)
+        if successRole and role then
+            local lowerRole = string.lower(role)
+            local staffKeywords = {"mod", "admin", "staff", "dev", "creator", "owner", "helper", "host", "moderator", "builder", "programmer", "co-owner"}
+            for _, kw in ipairs(staffKeywords) do
+                if string.find(lowerRole, kw) then
+                    return true, "Group Role: " .. role
+                end
+            end
+        end
+    else
+        local successCreatorUser, isUserCreator = pcall(function()
+            return game.CreatorType == Enum.CreatorType.User
+        end)
+        if successCreatorUser and isUserCreator then
+            if player.UserId == game.CreatorId then
+                return true, "Game Owner"
+            end
         end
     end
-    return nil
-end
 
-Remotes = GetRemotes()
+    local successAdminGroup, rankInAdminGroup = pcall(function()
+        return player:GetRankInGroup(3040540) -- Official Roblox Admin Group
+    end)
+    if successAdminGroup and rankInAdminGroup and rankInAdminGroup > 0 then
+        return true, "Roblox Administrator"
+    end
 
-local SlimeGunRemote, ZonesRemote, RollRemote, LootRemote, BoostRemote
-if Remotes then
-    local slimeService = Remotes:FindFirstChild("SlimeGunService")
-    if slimeService then
-        SlimeGunRemote = slimeService:FindFirstChild("RemoteFunction")
-    end
-    local zoneService = Remotes:FindFirstChild("ZonesService")
-    if zoneService then
-        ZonesRemote = zoneService:FindFirstChild("RemoteFunction")
-    end
-    local rollService = Remotes:FindFirstChild("RollService")
-    if rollService then
-        RollRemote = rollService:FindFirstChild("RemoteFunction")
-    end
-    local lootService = Remotes:FindFirstChild("LootService")
-    if lootService then
-        LootRemote = lootService:FindFirstChild("RemoteFunction")
-    end
-    local boostService = Remotes:FindFirstChild("BoostService")
-    if boostService then
-        BoostRemote = boostService:FindFirstChild("RemoteFunction")
-    end
-end
-
-print("[Kyypie] Remotes loaded:")
-print("  SlimeGunRemote:", SlimeGunRemote and "OK" or "NOT FOUND")
-print("  ZonesRemote:", ZonesRemote and "OK" or "NOT FOUND")
-print("  RollRemote:", RollRemote and "OK" or "NOT FOUND")
-print("  LootRemote:", LootRemote and "OK" or "NOT FOUND")
-print("  BoostRemote:", BoostRemote and "OK" or "NOT FOUND")
-
--- ==================== SAFE FLAG ACCESS ====================
-local function getFlag(name)
-    if not Rayfield or not Rayfield.Flags then return false end
-    local f = Rayfield.Flags[name]
-    if not f or type(f) ~= "table" then return false end
-    if f.CurrentValue ~= nil then
-        return f.CurrentValue == true
-    end
     return false
 end
 
--- ==================== NO CLIP & INFINITE JUMP CONNECTIONS ====================
-local noclipConnection = nil
-local infiniteJumpConnection = nil
+local detectedStaff = {}
+
+local function checkPlayer(player)
+    if not State.toggles.staffDetect1 then return end
+    local detected, reason = isStaff(player)
+    if detected then
+        detectedStaff[player] = reason
+        warn("[Kyypie Hub] Staff Detected: " .. player.Name .. " (" .. reason .. ")")
+        
+        Rayfield:Notify({
+            Title = "Staff Detected!",
+            Content = player.Name .. " (" .. reason .. ") has joined! Action: " .. State.staffAction,
+            Duration = 5,
+            Image = 4483362458,
+        })
+        
+        task.wait(1.5)
+        
+        if State.staffAction == "Leave Game" then
+            plr:Kick("[Kyypie Hub] Staff detected in server: " .. player.Name)
+        elseif State.staffAction == "Server Hop" then
+            serverHop()
+        elseif State.staffAction == "Pause Farm" then
+            pauseAutomation()
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(checkPlayer)
+
+Players.PlayerRemoving:Connect(function(player)
+    if detectedStaff[player] then
+        detectedStaff[player] = nil
+        
+        local staffStillHere = false
+        for _, _ in pairs(detectedStaff) do
+            staffStillHere = true
+            break
+        end
+        
+        if not staffStillHere and State.staffAction == "Pause Farm" then
+            Rayfield:Notify({
+                Title = "Staff Left",
+                Content = "All detected staff have left the server. Resuming farm...",
+                Duration = 4,
+                Image = 4483362458,
+            })
+            resumeAutomation()
+        end
+    end
+end)
 
 -- ==================== INPUT HELPERS ====================
 local function fireSlimeGun(model)
@@ -380,54 +456,6 @@ local function distToPos(pos)
 end
 local function rng(a, b) return a + math.random() * (b - a) end
 
--- ==================== NO CLIP ====================
-local function setNoclip(enabled)
-    if enabled then
-        if noclipConnection then noclipConnection:Disconnect() end
-        noclipConnection = RunService.Stepped:Connect(function()
-            local char = getChar()
-            if char then
-                for _, part in ipairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
-                    end
-                end
-            end
-        end)
-    else
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
-        end
-        local char = getChar()
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                end
-            end
-        end
-    end
-end
-
--- ==================== INFINITE JUMP ====================
-local function setInfiniteJump(enabled)
-    if enabled then
-        if infiniteJumpConnection then infiniteJumpConnection:Disconnect() end
-        infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
-            local hum = getHum()
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-    else
-        if infiniteJumpConnection then
-            infiniteJumpConnection:Disconnect()
-            infiniteJumpConnection = nil
-        end
-    end
-end
-
 -- ==================== ZONE HELPERS ====================
 local function getHighestOwnedZone()
     local zones = Workspace:FindFirstChild("Zones")
@@ -483,7 +511,7 @@ local function parseHealthText(text)
         if suffix == "K" then mult = 1e3; s = s:sub(1, -2)
         elseif suffix == "M" then mult = 1e6; s = s:sub(1, -2)
         elseif suffix == "B" then mult = 1e9; s = s:sub(1, -2) end
-                local n = tonumber(s)
+        local n = tonumber(s)
         return n and n * mult or nil
     end
     return toNum(curStr), toNum(maxStr)
@@ -1313,6 +1341,9 @@ task.spawn(function()
     end
 end)
 
+-- ==================== INITIALIZE AUTO REJOIN ====================
+setupAutoRejoin()
+
 -- ==================== UI: MAIN ====================
 local MainTab = Window:CreateTab("Main", 84342305212226)
 MainTab:CreateSection("Auto Farm")
@@ -1439,6 +1470,7 @@ local PotionDropdown = MainTab:CreateDropdown({
     end,
 })
 
+-- Note: Amount input kept for UI consistency but BoostService does not use amounts
 local PotionAmountInput = MainTab:CreateInput({
     Name = "Amount to Use",
     PlaceholderText = "1",
@@ -1534,45 +1566,6 @@ local ESPColorPicker = VisualsTab:CreateColorPicker({
 -- ==================== UI: SETTINGS ====================
 local SettingsTab = Window:CreateTab("Settings", 80758916183665)
 
-SettingsTab:CreateSection("Movement")
-
-local NoclipToggle = SettingsTab:CreateToggle({
-    Name = "No Clip",
-    CurrentValue = false,
-    Flag = "noclip1",
-    Callback = function(Value)
-        State.toggles.noclip1 = Value
-        setNoclip(Value)
-    end,
-})
-
-local InfJumpToggle = SettingsTab:CreateToggle({
-    Name = "Infinite Jump",
-    CurrentValue = false,
-    Flag = "infJump1",
-    Callback = function(Value)
-        State.toggles.infJump1 = Value
-        setInfiniteJump(Value)
-    end,
-})
-
-SettingsTab:CreateSection("Security")
-
-local AntiStaffKickToggle = SettingsTab:CreateToggle({
-    Name = "Anti Staff Kick",
-    CurrentValue = true,
-    Flag = "antiStaffKick1",
-    Callback = function(Value)
-        State.toggles.antiStaffKick1 = Value
-        Rayfield:Notify({
-            Title = "Anti Staff Kick",
-            Content = Value and "Protection enabled." or "Protection disabled.",
-            Duration = 2,
-            Image = 4483362458,
-        })
-    end,
-})
-
 local Themes = SettingsTab:CreateDropdown({
     Name = "Themes",
     Options = {"Default", "AmberGlow", "Amethyst", "Bloom", "DarkBlue", "Green", "Light", "Ocean", "Serenity"},
@@ -1585,6 +1578,52 @@ local Themes = SettingsTab:CreateDropdown({
 })
 
 -- ==================== CONFIGURATION INTERFACE ====================
+SettingsTab:CreateSection("Auto Rejoin & Staff Protection")
+
+local AutoRejoinToggle = SettingsTab:CreateToggle({
+    Name = "Auto Rejoin on Kick/Disconnect",
+    CurrentValue = false,
+    Flag = "autoRejoin1",
+    Callback = function(Value)
+        State.toggles.autoRejoin1 = Value
+    end,
+})
+
+local LoaderInput = SettingsTab:CreateInput({
+    Name = "Re-execute Script Loader",
+    PlaceholderText = "loadstring(game:HttpGet(...))()",
+    RemoveTextAfterFocusLost = false,
+    Flag = "loaderScript1",
+    Callback = function(Text)
+        State.loaderScript = Text
+    end,
+})
+
+local StaffDetectToggle = SettingsTab:CreateToggle({
+    Name = "Enable Staff Detection",
+    CurrentValue = false,
+    Flag = "staffDetect1",
+    Callback = function(Value)
+        State.toggles.staffDetect1 = Value
+        if Value then
+            for _, p in ipairs(Players:GetPlayers()) do
+                task.spawn(checkPlayer, p)
+            end
+        end
+    end,
+})
+
+local StaffActionDropdown = SettingsTab:CreateDropdown({
+    Name = "Staff Detected Action",
+    Options = {"Server Hop", "Leave Game", "Pause Farm", "Notify Only"},
+    CurrentOption = "Server Hop",
+    MultipleOptions = false,
+    Flag = "staffAction1",
+    Callback = function(Option)
+        State.staffAction = Option[1] or Option
+    end,
+})
+
 SettingsTab:CreateSection("Configuration Manager")
 
 SettingsTab:CreateButton({
@@ -1646,10 +1685,6 @@ plr.CharacterAdded:Connect(function()
     setE(false)
     hidePathRay()
     hideFruitRay()
-    if State.toggles.noclip1 then
-        task.wait(0.3)
-        setNoclip(true)
-    end
 end)
 
 -- ==================== INITIALIZATION ====================
