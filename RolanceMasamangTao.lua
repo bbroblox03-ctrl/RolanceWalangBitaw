@@ -142,6 +142,7 @@ local State = {
     potionCooldown = 2,
     walkSpeed = 16,
     configName = "",
+    autoLoadConfigName = "Default",
     toggles = {
         auto1 = false,
         auto2 = false,
@@ -158,6 +159,7 @@ local State = {
         noclip = false,
         infiniteJump = false,
         autoSaveConfig = false,
+        autoLoadConfig = false,
     }
 }
 
@@ -865,143 +867,35 @@ local function interactWithFruit(fruit)
     return false
 end
 
--- ==================== CONFIG SYSTEM ====================
-local configFolder = "KyypieHub/Configs"
-
-local function ensureConfigFolder()
-    pcall(function()
-        if not isfolder("KyypieHub") then
-            makefolder("KyypieHub")
-        end
-        if not isfolder(configFolder) then
-            makefolder(configFolder)
-        end
-    end)
-end
-
-local function getConfigNames()
-    local names = {}
-    pcall(function()
-        for _, file in ipairs(listfiles(configFolder)) do
-            local name = file:match("([^/\\]+)%.json$")
-            if name then
-                table.insert(names, name)
-            end
-        end
-    end)
-    return names
-end
-
-local function saveConfig(name)
-    ensureConfigFolder()
-    if not name or name == "" then name = "Default" end
-    local data = {
-        toggles = State.toggles,
-        fruitRadius = State.fruitCollectionRadius,
-        selectedPotion = State.selectedPotion,
-        espColor = {R = State.espColor.R, G = State.espColor.G, B = State.espColor.B},
-        espMode = State.espMode,
-        walkSpeed = State.walkSpeed,
-    }
-    local success, err = pcall(function()
-        writefile(configFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
-    end)
-    if success then
-        Rayfield:Notify({Title = "Config Saved", Content = "Saved as: " .. name, Duration = 3, Image = 4483362458})
-    else
-        Rayfield:Notify({Title = "Config Error", Content = tostring(err), Duration = 3, Image = 4483362458})
-    end
-    return success
-end
-
-local function loadConfig(name)
-    local success, data = pcall(function()
-        local content = readfile(configFolder .. "/" .. name .. ".json")
-        return HttpService:JSONDecode(content)
-    end)
-    if not success or not data then
-        Rayfield:Notify({Title = "Config Error", Content = "Failed to load " .. name, Duration = 3, Image = 4483362458})
-        return false
-    end
-    
-    for key, value in pairs(data.toggles or {}) do
-        if State.toggles[key] ~= nil then
-            State.toggles[key] = value
-        end
-    end
-    
-    if data.fruitRadius then State.fruitCollectionRadius = data.fruitRadius end
-    if data.selectedPotion then State.selectedPotion = data.selectedPotion end
-    if data.espColor then State.espColor = Color3.new(data.espColor.R, data.espColor.G, data.espColor.B) end
-    if data.espMode then State.espMode = data.espMode end
-    if data.walkSpeed then
-        State.walkSpeed = data.walkSpeed
-        local hum = getHum()
-        if hum then hum.WalkSpeed = State.walkSpeed end
-    end
-    
-    if State.toggles.noclip then setNoclip(true) else setNoclip(false) end
-    if State.toggles.infiniteJump then setInfiniteJump(true) else setInfiniteJump(false) end
-    if State.toggles.antiIdle then antiIdleEnabled = true end
-    
-    antiKickEnabled = State.toggles.antiKick or false
-    antiIdleEnabled = State.toggles.antiIdle or false
-    
-    pcall(function()
-        if HumanizerToggle then HumanizerToggle:Set(State.toggles.humanizer1) end
-        if FarmToggle then FarmToggle:Set(State.toggles.auto1) end
-        if CollectToggle then CollectToggle:Set(State.toggles.auto2) end
-        if FruitToggle then FruitToggle:Set(State.toggles.autoFruit1) end
-        if AutoZoneToggle then AutoZoneToggle:Set(State.toggles.autoZone1) end
-        if AutoRollToggle then AutoRollToggle:Set(State.toggles.autoRoll1) end
-        if FastRollToggle then FastRollToggle:Set(State.toggles.fastRoll1) end
-        if AutoPotionToggle then AutoPotionToggle:Set(State.toggles.autoPotion1) end
-        if AutoBlasterToggle then AutoBlasterToggle:Set(State.toggles.autoBlaster1) end
-        if ESPToggle then ESPToggle:Set(State.toggles.esp1) end
-        if FruitRadiusSlider then FruitRadiusSlider:Set(State.fruitCollectionRadius) end
-        if Slider then Slider:Set(State.walkSpeed or 16) end
-        if PotionDropdown then PotionDropdown:Set({State.selectedPotion}) end
-        if ESPColorPicker then ESPColorPicker:Set(State.espColor) end
-        if ESPModeDropdown then ESPModeDropdown:Set(State.espMode) end
-        if AntiKickToggle then AntiKickToggle:Set(State.toggles.antiKick or false) end
-        if AntiIdleToggle then AntiIdleToggle:Set(State.toggles.antiIdle or false) end
-        if NoclipToggle then NoclipToggle:Set(State.toggles.noclip or false) end
-        if InfJumpToggle then InfJumpToggle:Set(State.toggles.infiniteJump or false) end
-        if AutoSaveToggle then AutoSaveToggle:Set(State.toggles.autoSaveConfig or false) end
-    end)
-    
-    Rayfield:Notify({Title = "Config Loaded", Content = "Loaded: " .. name, Duration = 3, Image = 4483362458})
-    return true
-end
-
--- ==================== ANTI KICK ====================
+-- ==================== ANTI KICK (FIXED) ====================
 local antiKickEnabled = false
+
 local function setupAntiKick()
-    pcall(function()
+    local ok, err = pcall(function()
         local mt = getrawmetatable(game)
-        if mt then
-            local oldNamecall = mt.__namecall
-            setreadonly(mt, false)
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if method == "Kick" and self == plr and antiKickEnabled then
-                    Rayfield:Notify({Title = "Anti Kick", Content = "Kick attempt blocked!", Duration = 3, Image = 4483362458})
-                    return nil
-                end
-                return oldNamecall(self, ...)
-            end)
-            setreadonly(mt, true)
+        if not mt then
+            warn("[KyypieHub] getrawmetatable returned nil. AntiKick unavailable.")
+            return
         end
-    end)
-    pcall(function()
-        local oldKick = hookfunction(plr.Kick, function(self, msg)
-            if self == plr and antiKickEnabled then
-                Rayfield:Notify({Title = "Anti Kick", Content = "Blocked: " .. tostring(msg), Duration = 3, Image = 4483362458})
-                return
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+        
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if method == "Kick" and self == plr and antiKickEnabled then
+                warn("[KyypieHub] AntiKick: Blocked server kick attempt.")
+                return nil
             end
-            return oldKick(self, msg)
+            return oldNamecall(self, ...)
         end)
+        
+        setreadonly(mt, true)
     end)
+    if not ok then
+        warn("[KyypieHub] AntiKick setup error: " .. tostring(err))
+    else
+        print("[KyypieHub] AntiKick system initialized.")
+    end
 end
 
 -- ==================== ANTI IDLE ====================
@@ -1055,6 +949,118 @@ local function setInfiniteJump(enabled)
             infiniteJumpConnection = nil
         end
     end
+end
+
+-- ==================== CONFIG SYSTEM ====================
+local configFolder = "KyypieHub/Configs"
+
+local function ensureConfigFolder()
+    pcall(function()
+        if not isfolder("KyypieHub") then
+            makefolder("KyypieHub")
+        end
+        if not isfolder(configFolder) then
+            makefolder(configFolder)
+        end
+    end)
+end
+
+local function getConfigNames()
+    local names = {}
+    pcall(function()
+        for _, file in ipairs(listfiles(configFolder)) do
+            local name = file:match("([^/\\]+)%.json$")
+            if name then
+                table.insert(names, name)
+            end
+        end
+    end)
+    return names
+end
+
+local function saveConfig(name)
+    ensureConfigFolder()
+    if not name or name == "" then name = "Default" end
+    local data = {
+        toggles = State.toggles,
+        fruitRadius = State.fruitCollectionRadius,
+        selectedPotion = State.selectedPotion,
+        espColor = {R = State.espColor.R, G = State.espColor.G, B = State.espColor.B},
+        espMode = State.espMode,
+        walkSpeed = State.walkSpeed,
+        autoLoadConfigName = State.autoLoadConfigName,
+    }
+    local success, err = pcall(function()
+        writefile(configFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
+    end)
+    if success then
+        Rayfield:Notify({Title = "Config Saved", Content = "Saved as: " .. name, Duration = 3, Image = 4483362458})
+    else
+        Rayfield:Notify({Title = "Config Error", Content = tostring(err), Duration = 3, Image = 4483362458})
+    end
+    return success
+end
+
+local function loadConfig(name)
+    local success, data = pcall(function()
+        local content = readfile(configFolder .. "/" .. name .. ".json")
+        return HttpService:JSONDecode(content)
+    end)
+    if not success or not data then
+        Rayfield:Notify({Title = "Config Error", Content = "Failed to load " .. name, Duration = 3, Image = 4483362458})
+        return false
+    end
+    
+    for key, value in pairs(data.toggles or {}) do
+        if State.toggles[key] ~= nil then
+            State.toggles[key] = value
+        end
+    end
+    
+    if data.fruitRadius then State.fruitCollectionRadius = data.fruitRadius end
+    if data.selectedPotion then State.selectedPotion = data.selectedPotion end
+    if data.espColor then State.espColor = Color3.new(data.espColor.R, data.espColor.G, data.espColor.B) end
+    if data.espMode then State.espMode = data.espMode end
+    if data.walkSpeed then
+        State.walkSpeed = data.walkSpeed
+        local hum = getHum()
+        if hum then hum.WalkSpeed = State.walkSpeed end
+    end
+    if data.autoLoadConfigName then State.autoLoadConfigName = data.autoLoadConfigName end
+    
+    if State.toggles.noclip then setNoclip(true) else setNoclip(false) end
+    if State.toggles.infiniteJump then setInfiniteJump(true) else setInfiniteJump(false) end
+    
+    antiKickEnabled = State.toggles.antiKick or false
+    antiIdleEnabled = State.toggles.antiIdle or false
+    
+    pcall(function()
+        if HumanizerToggle then HumanizerToggle:Set(State.toggles.humanizer1) end
+        if FarmToggle then FarmToggle:Set(State.toggles.auto1) end
+        if CollectToggle then CollectToggle:Set(State.toggles.auto2) end
+        if FruitToggle then FruitToggle:Set(State.toggles.autoFruit1) end
+        if AutoZoneToggle then AutoZoneToggle:Set(State.toggles.autoZone1) end
+        if AutoRollToggle then AutoRollToggle:Set(State.toggles.autoRoll1) end
+        if FastRollToggle then FastRollToggle:Set(State.toggles.fastRoll1) end
+        if AutoPotionToggle then AutoPotionToggle:Set(State.toggles.autoPotion1) end
+        if AutoBlasterToggle then AutoBlasterToggle:Set(State.toggles.autoBlaster1) end
+        if ESPToggle then ESPToggle:Set(State.toggles.esp1) end
+        if FruitRadiusSlider then FruitRadiusSlider:Set(State.fruitCollectionRadius) end
+        if Slider then Slider:Set(State.walkSpeed or 16) end
+        if PotionDropdown then PotionDropdown:Set({State.selectedPotion}) end
+        if ESPColorPicker then ESPColorPicker:Set(State.espColor) end
+        if ESPModeDropdown then ESPModeDropdown:Set(State.espMode) end
+        if AntiKickToggle then AntiKickToggle:Set(State.toggles.antiKick or false) end
+        if AntiIdleToggle then AntiIdleToggle:Set(State.toggles.antiIdle or false) end
+        if NoclipToggle then NoclipToggle:Set(State.toggles.noclip or false) end
+        if InfJumpToggle then InfJumpToggle:Set(State.toggles.infiniteJump or false) end
+        if AutoSaveToggle then AutoSaveToggle:Set(State.toggles.autoSaveConfig or false) end
+        if AutoLoadToggle then AutoLoadToggle:Set(State.toggles.autoLoadConfig or false) end
+        if AutoLoadNameInput then AutoLoadNameInput:Set(State.autoLoadConfigName or "Default") end
+    end)
+    
+    Rayfield:Notify({Title = "Config Loaded", Content = "Loaded: " .. name, Duration = 3, Image = 4483362458})
+    return true
 end
 
 -- ==================== MAIN DAEMON ====================
@@ -1624,6 +1630,29 @@ local AutoSaveToggle = SettingsTab:CreateToggle({
     end,
 })
 
+-- ==================== AUTO LOAD CONFIG ====================
+SettingsTab:CreateSection("Auto Load")
+
+local AutoLoadNameInput = SettingsTab:CreateInput({
+    Name = "Auto Load Config Name",
+    PlaceholderText = "Default",
+    RemoveTextAfterFocusLost = false,
+    Flag = "autoLoadName1",
+    Callback = function(Text)
+        State.autoLoadConfigName = Text
+    end,
+})
+
+local AutoLoadToggle = SettingsTab:CreateToggle({
+    Name = "Auto Load Config on Start",
+    CurrentValue = false,
+    Flag = "autoLoadConfig1",
+    Callback = function(Value)
+        State.toggles.autoLoadConfig = Value
+        State.autoLoadConfig = Value
+    end,
+})
+
 -- ==================== PLAYER SAFETY SECTION ====================
 SettingsTab:CreateSection("Player Safety")
 
@@ -1727,4 +1756,15 @@ task.spawn(function()
         end)
         task.wait(30)
     end
+end)
+
+-- ==================== AUTO LOAD CONFIG ON START ====================
+task.delay(3, function()
+    pcall(function()
+        if State.toggles.autoLoadConfig then
+            local name = State.autoLoadConfigName
+            if not name or name == "" then name = "Default" end
+            loadConfig(name)
+        end
+    end)
 end)
